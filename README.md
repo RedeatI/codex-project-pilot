@@ -1,0 +1,42 @@
+# Codex Project Pilot
+
+An evidence-backed Codex Skill for coordinating several projects, repositories,
+and agent-owned workstreams toward one persistent goal.
+
+It provides a portable portfolio manifest, runtime admissions, first-nonzero
+formal-round semantics, a hash-chained decision ledger, long-contract routing, and
+privacy-gated GitHub publication guidance.
+
+## Install
+
+Requires Python 3.10 or newer for the deterministic control script.
+
+```powershell
+git clone https://github.com/RedeatI/codex-project-pilot.git "$env:USERPROFILE\.codex\skills\codex-project-pilot"
+```
+
+Then invoke `$codex-project-pilot` or describe a multi-project portfolio task.
+
+## Validate
+
+```powershell
+python scripts/portfolio_control.py --help
+python -m unittest discover -s tests -v
+python tests/e2e_cli.py
+python path\to\skill-creator\scripts\quick_validate.py .
+```
+
+See `references/portfolio-schema.md` for the manifest and
+`references/execution-contracts.md` for admission and convergence behavior. Read
+`references/github-publication.md` before any GitHub upload or visibility change.
+
+## Safety model
+
+The Skill automates routing and evidence handling, not permission. External writes,
+publication, releases, destructive cleanup, and credential use remain explicitly
+authorized actions. Real secrets stop a publication candidate and are never printed
+into reports or ledgers.
+
+## License
+
+Apache License 2.0.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Project Pilot"
+  short_description: "Coordinate multi-project work with evidence-backed progress"
+  default_prompt: "Use $codex-project-pilot to audit my portfolio and advance the safest next actions."
