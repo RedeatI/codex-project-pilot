@@ -15,10 +15,22 @@ from typing import Any
 
 MANIFEST_SCHEMA = "codex-project-pilot/1"
 EVENT_SCHEMA = "codex-project-pilot-event/1"
+TOPOLOGY_SCHEMA = "codex-project-pilot-topology/1"
+TOPOLOGY_AUDIT_SCHEMA = "codex-project-pilot-topology-audit/1"
 ZERO_HASH = "0" * 64
 PROJECT_STATES = {"frozen", "ready", "active", "waiting", "blocked", "complete"}
 HOST_SCOPES = {"local", "remote"}
 VISIBILITIES = {"private", "public", "internal"}
+THREAD_STATES = {
+    "queued",
+    "idle",
+    "active",
+    "waiting",
+    "blocked",
+    "handoff_only",
+    "retired",
+    "unavailable",
+}
 ADMISSION_BOOLEAN_FIELDS = {
     "external_mutation",
     "user_authorized",
@@ -183,6 +195,380 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                     f"{context}.repository: full_name must be null or a non-empty string"
                 )
     return errors
+
+
+def validate_topology(topology: dict[str, Any]) -> list[str]:
+    errors = require_fields(
+        topology,
+        [
+            "schema_version",
+            "authoritative",
+            "observed_at_utc",
+            "policy",
+            "migration",
+            "threads",
+        ],
+        "topology",
+    )
+    if errors:
+        return errors
+    if topology["schema_version"] != TOPOLOGY_SCHEMA:
+        errors.append(f"topology: schema_version must be {TOPOLOGY_SCHEMA}")
+    if not isinstance(topology["authoritative"], bool):
+        errors.append("topology: authoritative must be boolean")
+    if not is_non_empty_string(topology["observed_at_utc"]):
+        errors.append("topology: observed_at_utc must be a non-empty string")
+
+    policy = topology["policy"]
+    role_names: set[str] = set()
+    if not isinstance(policy, dict):
+        errors.append("topology.policy: must be an object")
+    else:
+        errors.extend(
+            require_fields(
+                policy,
+                [
+                    "max_active_turns",
+                    "max_writers_per_project",
+                    "control_roles",
+                    "migration_controller_role",
+                ],
+                "topology.policy",
+            )
+        )
+        for field in ("max_active_turns", "max_writers_per_project"):
+            value = policy.get(field)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                errors.append(f"topology.policy: {field} must be a positive integer")
+        if not is_non_empty_string(policy.get("migration_controller_role")):
+            errors.append(
+                "topology.policy: migration_controller_role must be a non-empty string"
+            )
+        control_roles = policy.get("control_roles")
+        if not isinstance(control_roles, list) or not control_roles:
+            errors.append("topology.policy: control_roles must be a non-empty array")
+        else:
+            for index, definition in enumerate(control_roles):
+                context = f"topology.policy.control_roles[{index}]"
+                if not isinstance(definition, dict):
+                    errors.append(f"{context}: must be an object")
+                    continue
+                errors.extend(
+                    require_fields(
+                        definition,
+                        ["role", "required", "max_instances", "required_authorities"],
+                        context,
+                    )
+                )
+                if not is_non_empty_string(definition.get("role")):
+                    errors.append(f"{context}: role must be a non-empty string")
+                else:
+                    role = definition["role"]
+                    if role in role_names:
+                        errors.append(f"{context}: duplicate control role {role}")
+                    role_names.add(role)
+                if not isinstance(definition.get("required"), bool):
+                    errors.append(f"{context}: required must be boolean")
+                max_instances = definition.get("max_instances")
+                if (
+                    not isinstance(max_instances, int)
+                    or isinstance(max_instances, bool)
+                    or max_instances < 1
+                ):
+                    errors.append(f"{context}: max_instances must be a positive integer")
+                if not is_string_list(definition.get("required_authorities")):
+                    errors.append(
+                        f"{context}: required_authorities must be an array of strings"
+                    )
+        controller_role = policy.get("migration_controller_role")
+        if is_non_empty_string(controller_role) and role_names and controller_role not in role_names:
+            errors.append(
+                "topology.policy: migration_controller_role must name a control role"
+            )
+
+    migration = topology["migration"]
+    if not isinstance(migration, dict):
+        errors.append("topology.migration: must be an object")
+    else:
+        errors.extend(
+            require_fields(
+                migration,
+                ["controller_task_id", "active_target_task_id", "lock_held"],
+                "topology.migration",
+            )
+        )
+        if not is_non_empty_string(migration.get("controller_task_id")):
+            errors.append(
+                "topology.migration: controller_task_id must be a non-empty string"
+            )
+        target = migration.get("active_target_task_id")
+        if target is not None and not is_non_empty_string(target):
+            errors.append(
+                "topology.migration: active_target_task_id must be null or a non-empty string"
+            )
+        if not isinstance(migration.get("lock_held"), bool):
+            errors.append("topology.migration: lock_held must be boolean")
+
+    threads = topology["threads"]
+    if not isinstance(threads, list) or not threads:
+        errors.append("topology: threads must be a non-empty array")
+        return errors
+    seen_task_ids: set[str] = set()
+    required_thread_fields = [
+        "task_id",
+        "role",
+        "project_id",
+        "host_id",
+        "root",
+        "state",
+        "active_turn",
+        "writer",
+        "provisional",
+        "authorities",
+    ]
+    for index, thread in enumerate(threads):
+        context = f"topology.threads[{index}]"
+        if not isinstance(thread, dict):
+            errors.append(f"{context}: must be an object")
+            continue
+        errors.extend(require_fields(thread, required_thread_fields, context))
+        if any(field not in thread for field in required_thread_fields):
+            continue
+        for field in ("task_id", "role", "host_id", "root"):
+            if not is_non_empty_string(thread[field]):
+                errors.append(f"{context}: {field} must be a non-empty string")
+        task_id = thread["task_id"]
+        if isinstance(task_id, str):
+            if task_id in seen_task_ids:
+                errors.append(f"{context}: duplicate task_id {task_id}")
+            seen_task_ids.add(task_id)
+        project_id = thread["project_id"]
+        if project_id is not None and not is_non_empty_string(project_id):
+            errors.append(f"{context}: project_id must be null or a non-empty string")
+        if not is_enum_value(thread["state"], THREAD_STATES):
+            errors.append(f"{context}: state is invalid")
+        for field in ("active_turn", "writer", "provisional"):
+            if not isinstance(thread[field], bool):
+                errors.append(f"{context}: {field} must be boolean")
+        if not is_string_list(thread["authorities"]):
+            errors.append(f"{context}: authorities must be an array of strings")
+        elif len(thread["authorities"]) != len(set(thread["authorities"])):
+            errors.append(f"{context}: authorities must not contain duplicates")
+    return errors
+
+
+def audit_topology(
+    manifest: dict[str, Any], topology: dict[str, Any]
+) -> dict[str, Any]:
+    manifest_errors = validate_manifest(manifest)
+    topology_errors = validate_topology(topology)
+    if manifest_errors or topology_errors:
+        raise ControlError("; ".join(manifest_errors + topology_errors))
+
+    findings: list[dict[str, Any]] = []
+
+    def finding(code: str, message: str, **evidence: Any) -> None:
+        item = {"code": code, "message": message}
+        if evidence:
+            item["evidence"] = evidence
+        findings.append(item)
+
+    policy = topology["policy"]
+    threads = topology["threads"]
+    projects = {project["id"]: project for project in manifest["projects"]}
+    tasks = {thread["task_id"]: thread for thread in threads}
+    active_threads = [thread for thread in threads if thread["active_turn"]]
+
+    if not topology["authoritative"]:
+        finding(
+            "NON_AUTHORITATIVE_TOPOLOGY",
+            "topology audit requires executor-owned runtime readback",
+        )
+    if len(active_threads) > policy["max_active_turns"]:
+        finding(
+            "ACTIVE_TURN_LIMIT_EXCEEDED",
+            "active turns exceed the configured portfolio limit",
+            active_turn_count=len(active_threads),
+            max_active_turns=policy["max_active_turns"],
+            task_ids=[thread["task_id"] for thread in active_threads],
+        )
+
+    for definition in policy["control_roles"]:
+        matching = [thread for thread in threads if thread["role"] == definition["role"]]
+        if definition["required"] and not matching:
+            finding(
+                "REQUIRED_CONTROL_ROLE_MISSING",
+                f"required control role is missing: {definition['role']}",
+                role=definition["role"],
+            )
+        if len(matching) > definition["max_instances"]:
+            finding(
+                "CONTROL_ROLE_MULTIPLICITY",
+                f"control role exceeds max_instances: {definition['role']}",
+                role=definition["role"],
+                task_ids=[thread["task_id"] for thread in matching],
+            )
+        required_authorities = set(definition["required_authorities"])
+        for thread in matching:
+            missing = sorted(required_authorities - set(thread["authorities"]))
+            if missing:
+                finding(
+                    "CONTROL_ROLE_AUTHORITY_MISSING",
+                    f"control role lacks required authorities: {definition['role']}",
+                    task_id=thread["task_id"],
+                    missing_authorities=missing,
+                )
+
+    writer_counts: Counter[str] = Counter()
+    for thread in threads:
+        if thread["active_turn"] and thread["state"] != "active":
+            finding(
+                "ACTIVE_TURN_STATE_MISMATCH",
+                "an active turn must use state=active",
+                task_id=thread["task_id"],
+                state=thread["state"],
+            )
+        if thread["provisional"] and thread["state"] not in {"queued", "handoff_only"}:
+            finding(
+                "PROVISIONAL_TASK_NOT_FROZEN",
+                "a provisional task must remain queued or handoff_only",
+                task_id=thread["task_id"],
+                state=thread["state"],
+            )
+        if thread["writer"]:
+            if thread["project_id"] is None:
+                finding(
+                    "WRITER_WITHOUT_PROJECT",
+                    "a writer lease must belong to one project",
+                    task_id=thread["task_id"],
+                )
+            else:
+                writer_counts[thread["project_id"]] += 1
+            if thread["provisional"]:
+                finding(
+                    "PROVISIONAL_WRITER",
+                    "a provisional task cannot hold a writer lease",
+                    task_id=thread["task_id"],
+                )
+        project_id = thread["project_id"]
+        if project_id is not None and project_id not in projects:
+            finding(
+                "UNKNOWN_PROJECT_TASK",
+                "task references a project absent from the manifest",
+                task_id=thread["task_id"],
+                project_id=project_id,
+            )
+
+    for project_id, count in sorted(writer_counts.items()):
+        if count > policy["max_writers_per_project"]:
+            finding(
+                "PROJECT_WRITER_LIMIT_EXCEEDED",
+                "project has more concurrent writer leases than allowed",
+                project_id=project_id,
+                writer_count=count,
+                max_writers_per_project=policy["max_writers_per_project"],
+                task_ids=[
+                    thread["task_id"]
+                    for thread in threads
+                    if thread["project_id"] == project_id and thread["writer"]
+                ],
+            )
+
+    for project_id, project in projects.items():
+        owner_task_id = project["owner_task_id"]
+        if owner_task_id is None:
+            continue
+        owner = tasks.get(owner_task_id)
+        if owner is None:
+            finding(
+                "OWNER_TASK_MISSING",
+                "manifest owner_task_id is absent from the topology",
+                project_id=project_id,
+                owner_task_id=owner_task_id,
+            )
+            continue
+        if owner["project_id"] != project_id:
+            finding(
+                "OWNER_PROJECT_MISMATCH",
+                "manifest owner task is attached to a different project",
+                project_id=project_id,
+                owner_task_id=owner_task_id,
+                observed_project_id=owner["project_id"],
+            )
+        if not owner["writer"]:
+            finding(
+                "OWNER_WITHOUT_WRITER_LEASE",
+                "manifest owner task must hold the project's writer lease",
+                project_id=project_id,
+                owner_task_id=owner_task_id,
+            )
+        if owner["host_id"] != project["host_id"]:
+            finding(
+                "OWNER_HOST_MISMATCH",
+                "manifest owner task is on a different host",
+                project_id=project_id,
+                owner_task_id=owner_task_id,
+                expected_host_id=project["host_id"],
+                observed_host_id=owner["host_id"],
+            )
+        expected_root = canonical_root(project["root"], project["host_scope"])
+        observed_root = canonical_root(owner["root"], project["host_scope"])
+        if expected_root != observed_root:
+            finding(
+                "OWNER_ROOT_MISMATCH",
+                "manifest owner task uses a different canonical root",
+                project_id=project_id,
+                owner_task_id=owner_task_id,
+                expected_root=project["root"],
+                observed_root=owner["root"],
+            )
+
+    migration = topology["migration"]
+    controller = tasks.get(migration["controller_task_id"])
+    if controller is None:
+        finding(
+            "MIGRATION_CONTROLLER_MISSING",
+            "migration controller task is absent from the topology",
+            controller_task_id=migration["controller_task_id"],
+        )
+    elif controller["role"] != policy["migration_controller_role"]:
+        finding(
+            "MIGRATION_CONTROLLER_ROLE_MISMATCH",
+            "migration controller task has the wrong control role",
+            controller_task_id=migration["controller_task_id"],
+            expected_role=policy["migration_controller_role"],
+            observed_role=controller["role"],
+        )
+    target_task_id = migration["active_target_task_id"]
+    if migration["lock_held"] and target_task_id is None:
+        finding(
+            "MIGRATION_LOCK_WITHOUT_TARGET",
+            "a held migration lock requires one active target",
+        )
+    if not migration["lock_held"] and target_task_id is not None:
+        finding(
+            "MIGRATION_TARGET_WITHOUT_LOCK",
+            "an active migration target requires the migration lock",
+            active_target_task_id=target_task_id,
+        )
+    if target_task_id is not None and target_task_id not in tasks:
+        finding(
+            "MIGRATION_TARGET_MISSING",
+            "active migration target is absent from the topology",
+            active_target_task_id=target_task_id,
+        )
+
+    return {
+        "schema_version": TOPOLOGY_AUDIT_SCHEMA,
+        "ok": not findings,
+        "portfolio_id": manifest["portfolio_id"],
+        "observed_at_utc": topology["observed_at_utc"],
+        "thread_count": len(threads),
+        "active_turn_count": len(active_threads),
+        "writer_counts": dict(sorted(writer_counts.items())),
+        "finding_count": len(findings),
+        "findings": findings,
+    }
 
 
 def canonical_root(path: str, scope: str) -> str:
@@ -538,6 +924,9 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status")
     status.add_argument("manifest", type=Path)
     status.add_argument("--ledger", type=Path)
+    topology = sub.add_parser("audit-topology")
+    topology.add_argument("manifest", type=Path)
+    topology.add_argument("topology", type=Path)
     admit = sub.add_parser("admit")
     admit.add_argument("plan", type=Path)
     admit.add_argument("readback", type=Path)
@@ -562,6 +951,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "status":
             print(canonical_json(status_summary(load_json(args.manifest), args.ledger)))
             return 0
+        if args.command == "audit-topology":
+            result = audit_topology(load_json(args.manifest), load_json(args.topology))
+            print(canonical_json(result))
+            return 0 if result["ok"] else 10
         if args.command == "admit":
             result = evaluate_admission(load_json(args.plan), load_json(args.readback))
             print(canonical_json(result))

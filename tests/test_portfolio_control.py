@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import json
 import tempfile
@@ -40,6 +41,113 @@ def valid_manifest():
                     "uploaded": False,
                 },
             }
+        ],
+    }
+
+
+def valid_topology():
+    root = str(Path.cwd())
+    return {
+        "schema_version": "codex-project-pilot-topology/1",
+        "authoritative": True,
+        "observed_at_utc": "2026-08-22T00:00:00Z",
+        "policy": {
+            "max_active_turns": 3,
+            "max_writers_per_project": 1,
+            "control_roles": [
+                {
+                    "role": "root_controller",
+                    "required": True,
+                    "max_instances": 1,
+                    "required_authorities": ["portfolio_decide"],
+                },
+                {
+                    "role": "scheduler",
+                    "required": True,
+                    "max_instances": 1,
+                    "required_authorities": ["topology_read"],
+                },
+                {
+                    "role": "runtime_supervisor",
+                    "required": True,
+                    "max_instances": 1,
+                    "required_authorities": ["ledger_write", "migration_control"],
+                },
+                {
+                    "role": "owner_liaison",
+                    "required": True,
+                    "max_instances": 1,
+                    "required_authorities": ["owner_request"],
+                },
+            ],
+            "migration_controller_role": "runtime_supervisor",
+        },
+        "migration": {
+            "controller_task_id": "runtime-1",
+            "active_target_task_id": None,
+            "lock_held": False,
+        },
+        "threads": [
+            {
+                "task_id": "root-1",
+                "role": "root_controller",
+                "project_id": None,
+                "host_id": "local",
+                "root": root,
+                "state": "idle",
+                "active_turn": False,
+                "writer": False,
+                "provisional": False,
+                "authorities": ["portfolio_decide"],
+            },
+            {
+                "task_id": "scheduler-1",
+                "role": "scheduler",
+                "project_id": None,
+                "host_id": "local",
+                "root": root,
+                "state": "idle",
+                "active_turn": False,
+                "writer": False,
+                "provisional": False,
+                "authorities": ["topology_read"],
+            },
+            {
+                "task_id": "runtime-1",
+                "role": "runtime_supervisor",
+                "project_id": None,
+                "host_id": "local",
+                "root": root,
+                "state": "active",
+                "active_turn": True,
+                "writer": False,
+                "provisional": False,
+                "authorities": ["ledger_write", "migration_control"],
+            },
+            {
+                "task_id": "liaison-1",
+                "role": "owner_liaison",
+                "project_id": None,
+                "host_id": "local",
+                "root": root,
+                "state": "idle",
+                "active_turn": False,
+                "writer": False,
+                "provisional": False,
+                "authorities": ["owner_request"],
+            },
+            {
+                "task_id": "alpha-owner",
+                "role": "project_owner",
+                "project_id": "alpha",
+                "host_id": "local",
+                "root": root,
+                "state": "active",
+                "active_turn": True,
+                "writer": True,
+                "provisional": False,
+                "authorities": ["repo_write"],
+            },
         ],
     }
 
@@ -135,6 +243,60 @@ class PortfolioControlTests(unittest.TestCase):
         result = CONTROL.evaluate_admission(plan, readback)
         self.assertEqual(result["first_nonzero_check"], "host_match")
         self.assertEqual(result["outcome_class"], "BLOCKED_HOST_IDENTITY")
+
+    def test_topology_audit_passes_for_control_plane_and_single_writer(self):
+        manifest = valid_manifest()
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        result = CONTROL.audit_topology(manifest, valid_topology())
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["active_turn_count"], 2)
+        self.assertEqual(result["writer_counts"], {"alpha": 1})
+
+    def test_topology_audit_reports_duplicate_control_role(self):
+        topology = valid_topology()
+        duplicate = copy.deepcopy(topology["threads"][1])
+        duplicate["task_id"] = "scheduler-2"
+        topology["threads"].append(duplicate)
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "CONTROL_ROLE_MULTIPLICITY",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_reports_multiple_project_writers(self):
+        topology = valid_topology()
+        duplicate = copy.deepcopy(topology["threads"][-1])
+        duplicate["task_id"] = "alpha-writer-2"
+        duplicate["active_turn"] = False
+        duplicate["state"] = "idle"
+        topology["threads"].append(duplicate)
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PROJECT_WRITER_LIMIT_EXCEEDED",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_reports_unfenced_migration_target(self):
+        topology = valid_topology()
+        topology["migration"]["active_target_task_id"] = "alpha-owner"
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "MIGRATION_TARGET_WITHOUT_LOCK",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_checks_manifest_owner_identity(self):
+        manifest = valid_manifest()
+        manifest["projects"][0]["owner_task_id"] = "missing-owner"
+        result = CONTROL.audit_topology(manifest, valid_topology())
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "OWNER_TASK_MISSING",
+            {finding["code"] for finding in result["findings"]},
+        )
 
     def test_hash_chained_append_and_verify(self):
         with tempfile.TemporaryDirectory() as directory:

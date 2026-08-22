@@ -75,6 +75,9 @@ Set `authoritative` only from executor-owned runtime evidence. When
 
 ## Progress routing
 
+- Audit the current runtime topology before a dispatch wave that creates, resumes,
+  migrates, or changes a task's writer role. Use the topology audit described in
+  [thread-architecture.md](thread-architecture.md).
 - Parallelize only independent projects with separate writers and no shared lock,
   candidate, release channel, or owner decision.
 - Use one controller and a fenced lock for task migrations or shared portfolio
@@ -88,6 +91,11 @@ Set `authoritative` only from executor-owned runtime evidence. When
   action; blocked lacks authority or a viable next action.
 - A harness-only failure cannot invalidate already verified product bytes. Preserve
   the candidate identity and repair the harness in a new round.
+
+Control-plane threads should exchange compact state, not act as parallel project
+writers. Project tasks report evidence deltas to runtime supervision; scheduling
+uses that snapshot to propose admissions; root decides only portfolio-level matters;
+owner liaison carries the minimal human action request.
 
 ## Completion audit
 

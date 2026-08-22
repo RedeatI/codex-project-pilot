@@ -61,3 +61,15 @@ Update state from evidence. Do not mark a project complete because its task says
 is complete; record the evidence that proves the desired outcome.
 
 Run `validate-manifest` after every manifest edit.
+
+## Thread identity boundary
+
+`owner_task_id` names the intended current writer for a project. It is not proof
+that the task still exists, is on the correct host/root, or holds the writer lease.
+Keep volatile task state out of the portfolio manifest and capture it in a separate
+authoritative topology snapshot described in
+[thread-architecture.md](thread-architecture.md).
+
+Run `audit-topology` after task creation, owner transfer, recovery, migration, or a
+material concurrency change. Update `owner_task_id` only from runtime readback; do
+not preserve a stale task ID merely because it appears in an earlier report.

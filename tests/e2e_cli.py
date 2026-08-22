@@ -51,6 +51,7 @@ def main() -> int:
         readback_path = runtime_root / "readback.json"
         event_path = runtime_root / "event.json"
         ledger_path = runtime_root / "events.jsonl"
+        topology_path = runtime_root / "topology.json"
 
         write_json(
             manifest_path,
@@ -128,9 +129,83 @@ def main() -> int:
                 "payload": {"formal_result": "ZERO"},
             },
         )
+        write_json(
+            topology_path,
+            {
+                "schema_version": "codex-project-pilot-topology/1",
+                "authoritative": True,
+                "observed_at_utc": "2026-08-22T00:00:00Z",
+                "policy": {
+                    "max_active_turns": 2,
+                    "max_writers_per_project": 1,
+                    "control_roles": [
+                        {
+                            "role": "root_controller",
+                            "required": True,
+                            "max_instances": 1,
+                            "required_authorities": ["portfolio_decide"],
+                        },
+                        {
+                            "role": "runtime_supervisor",
+                            "required": True,
+                            "max_instances": 1,
+                            "required_authorities": [
+                                "ledger_write",
+                                "migration_control",
+                            ],
+                        },
+                    ],
+                    "migration_controller_role": "runtime_supervisor",
+                },
+                "migration": {
+                    "controller_task_id": "runtime-1",
+                    "active_target_task_id": None,
+                    "lock_held": False,
+                },
+                "threads": [
+                    {
+                        "task_id": "root-1",
+                        "role": "root_controller",
+                        "project_id": None,
+                        "host_id": "e2e-local",
+                        "root": str(runtime_root),
+                        "state": "idle",
+                        "active_turn": False,
+                        "writer": False,
+                        "provisional": False,
+                        "authorities": ["portfolio_decide"],
+                    },
+                    {
+                        "task_id": "runtime-1",
+                        "role": "runtime_supervisor",
+                        "project_id": None,
+                        "host_id": "e2e-local",
+                        "root": str(runtime_root),
+                        "state": "idle",
+                        "active_turn": False,
+                        "writer": False,
+                        "provisional": False,
+                        "authorities": ["ledger_write", "migration_control"],
+                    },
+                    {
+                        "task_id": "alpha-owner",
+                        "role": "project_owner",
+                        "project_id": "alpha",
+                        "host_id": "e2e-local",
+                        "root": str(runtime_root),
+                        "state": "active",
+                        "active_turn": True,
+                        "writer": True,
+                        "provisional": False,
+                        "authorities": ["control_write"],
+                    },
+                ],
+            },
+        )
 
         manifest = run_cli("validate-manifest", str(manifest_path))
         admission = run_cli("admit", str(plan_path), str(readback_path))
+        topology = run_cli("audit-topology", str(manifest_path), str(topology_path))
         appended = run_cli(
             "append-event",
             str(ledger_path),
@@ -143,7 +218,11 @@ def main() -> int:
         verified = run_cli("verify-ledger", str(ledger_path))
         status = run_cli("status", str(manifest_path), "--ledger", str(ledger_path))
 
-        if not manifest.get("ok") or admission.get("formal_result") != "ZERO":
+        if (
+            not manifest.get("ok")
+            or admission.get("formal_result") != "ZERO"
+            or not topology.get("ok")
+        ):
             return 1
         if appended.get("seq") != 0 or verified.get("event_count") != 1:
             return 1
@@ -155,6 +234,7 @@ def main() -> int:
                     "ok": True,
                     "manifest": "PASS",
                     "admission": "ZERO",
+                    "topology": "PASS",
                     "ledger_events": 1,
                     "status": "PASS",
                 },

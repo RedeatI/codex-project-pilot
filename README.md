@@ -3,9 +3,16 @@
 An evidence-backed Codex Skill for coordinating several projects, repositories,
 and agent-owned workstreams toward one persistent goal.
 
-It provides a portable portfolio manifest, runtime admissions, first-nonzero
-formal-round semantics, a hash-chained decision ledger, long-contract routing, and
-privacy-gated GitHub publication guidance.
+It provides a portable portfolio manifest, runtime admissions, deterministic
+thread-topology audits, first-nonzero formal-round semantics, a hash-chained
+decision ledger, long-contract routing, and privacy-gated GitHub publication
+guidance.
+
+The recommended topology separates four control-plane responsibilities (root
+decisions, scheduling, runtime supervision/migrations, and owner liaison) from
+project execution. Runtime snapshots make duplicate control roles, stale owners,
+unfenced migrations, excess active turns, and multiple project writers visible
+before they become coordination failures.
 
 ## Install
 
@@ -21,14 +28,17 @@ Then invoke `$codex-project-pilot` or describe a multi-project portfolio task.
 
 ```powershell
 python scripts/portfolio_control.py --help
+python scripts/portfolio_control.py audit-topology portfolio.json topology.json
 python -m unittest discover -s tests -v
 python tests/e2e_cli.py
 python path\to\skill-creator\scripts\quick_validate.py .
 ```
 
 See `references/portfolio-schema.md` for the manifest and
-`references/execution-contracts.md` for admission and convergence behavior. Read
-`references/github-publication.md` before any GitHub upload or visibility change.
+`references/thread-architecture.md` for control-plane and project-task topology.
+See `references/execution-contracts.md` for admission and convergence behavior.
+Read `references/github-publication.md` before any GitHub upload or visibility
+change.
 
 ## Safety model
 
