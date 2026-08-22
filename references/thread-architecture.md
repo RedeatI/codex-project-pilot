@@ -74,23 +74,36 @@ that the portfolio completed. Maintain an explicit `control_lifecycle` readback:
 
 ```json
 {
-  "phase": "owner_attention",
+  "phase": "running",
   "root_task_id": "root-1",
-  "safe_next_action": false,
+  "safe_next_action": true,
   "pending_wait_id": null,
-  "pending_owner_request_id": "closure-1",
-  "consecutive_no_change": 3,
+  "pending_owner_request_id": null,
+  "consecutive_no_change": 0,
   "automation_id": "portfolio-heartbeat",
-  "automation_status": "PAUSED",
-  "closure_id": "closure-1",
-  "closure_delivered": true,
-  "closure_owner_liaison_task_id": "liaison-1"
+  "automation_status": "ACTIVE",
+  "closure_id": null,
+  "closure_delivered": false,
+  "closure_owner_liaison_task_id": null,
+  "work_lease": {
+    "action_id": "project-a-wave-7",
+    "admission_id": "admission-project-a-wave-7",
+    "admission_result": "ZERO",
+    "dispatched_task_id": "project-a-owner",
+    "baseline_event_seq": 41,
+    "latest_event_seq": 43,
+    "progress_kind": "dispatched",
+    "evidence_ids": ["admission-project-a-wave-7", "dispatch-project-a-owner"],
+    "lease_renewed": true,
+    "action_terminal": false
+  }
 }
 ```
 
 Use these phases:
 
-- `running`: one authorized, admitted, safe next action exists.
+- `running`: one authorized, admitted, safe next action exists and the current
+  heartbeat has qualifying work evidence for it.
 - `waiting`: an identified external event or delivered owner request exists.
 - `owner_attention`: the portfolio is incomplete but has no safe next action,
   identified wait, or valid owner request.
@@ -98,9 +111,41 @@ Use these phases:
 - `stopped`: the user or Root explicitly stopped, or terminal evidence proves that
   control cannot continue.
 
-Track a liveness lease with the no-change streak and pending IDs. Two consecutive
-no-change runs on an incomplete portfolio, without an identified wait or owner
-request, require `owner_attention`; do not wake Root forever. For
+Track both a liveness lease and a work lease. A work lease renews only when one of
+these facts is authoritative in the current run:
+
+- `admitted`: a named fresh admission returned `ZERO`, the ledger advanced, and the
+  admission ID is named in the new evidence IDs;
+- `dispatched`: that admitted evidence is current, the ledger advanced, and an
+  executor-owned target task ID proves the dispatch;
+- `evidence_delta`: the hash-chained ledger sequence advanced and the new evidence
+  IDs are named;
+- `terminal`: the ledger advanced, the evidence IDs are named, and the action is
+  marked terminal.
+
+`none`, a proposed next action, a changed timestamp, a topology refresh, or an
+incremented no-change counter never renews the lease. A terminal action cannot be
+reused as the safe next action. Each heartbeat must execute or dispatch at most one
+bounded admitted action and finish with this readback:
+
+```text
+WORK_LEASE_READBACK
+ACTION_ID=<stable action id>
+QUALIFYING_PROGRESS=ADMITTED|DISPATCHED|EVIDENCE_DELTA|TERMINAL|NONE
+PREVIOUS_LEDGER_SEQ=<integer>
+LATEST_LEDGER_SEQ=<integer>
+DISPATCHED_TASK_ID=<task id or NONE>
+EVIDENCE_IDS=<ids or NONE>
+NEXT_PHASE=RUNNING|WAITING|OWNER_ATTENTION|COMPLETE|STOPPED
+AUTOMATION_ACTION=KEEP_ACTIVE|PAUSE
+```
+
+`KEEP_ACTIVE` is valid only for `running` with a renewed work lease. One empty
+running check on an incomplete portfolio, without an identified wait or owner
+request, requires `owner_attention`; do not wake Root again. A waiting monitor must
+pause after its first empty check. If polling is genuinely required later, admit one
+new bounded recheck at its due time; do not leave a frequent heartbeat active around
+an opaque client queue or placeholder ID. For
 `owner_attention`, `complete`, or `stopped`, send exactly one deduplicated closure
 packet to the declared owner liaison. After delivery, pause the monitor automation.
 Keep its configuration and evidence so a later user decision can resume it through
@@ -235,7 +280,7 @@ checks:
 - manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;
 - migration controller, target, and lock consistency;
-- Root lifecycle, liveness lease, owner-liaison closure, and monitor pause state;
+- Root lifecycle, work/liveness leases, owner-liaison closure, and monitor pause state;
 - context summary quality, renewal classification, and notification routing;
 - tasks that reference projects absent from the manifest.
 

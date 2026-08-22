@@ -34,12 +34,18 @@ host identity, or evidence boundaries.
    host mismatch, harness failure, product failure, and external-state waiting as
    different outcomes. Deduplicate context-renewal notifications by target and
    notification ID. Treat runtime idle as turn completion, not portfolio completion.
-   Give recurring monitors a liveness lease: repeated no-change without an identified
-   wait or owner request routes once to the owner liaison, then pauses after delivery.
+   Require each active `running` monitor to renew an evidence-backed work lease by
+   admitting, dispatching, advancing ledger evidence, or recording a terminal result.
+   A plan, timestamp, topology snapshot, or no-change counter is not work. One empty
+   running check routes to attention; one empty waiting check pauses the monitor.
 7. Append material decisions and terminal results to the hash-chained portfolio
    ledger. Recompute the next action from current evidence and continue while safe.
 8. Claim completion only after every requirement has authoritative evidence. Keep
    the user's full goal active when any requirement remains unproved.
+
+A heartbeat is a bounded control trigger, not progress by itself. It must perform or
+dispatch one admitted action and emit a `WORK_LEASE_READBACK`, or stop renewing the
+automation in that same run.
 
 Automatic advancement never implies automatic permission. Obtain explicit user
 authorization before external writes, repository publication, release, credential

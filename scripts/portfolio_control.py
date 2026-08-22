@@ -41,6 +41,14 @@ CONTROL_LIFECYCLE_PHASES = {
     "stopped",
 }
 AUTOMATION_STATUSES = {"ACTIVE", "PAUSED", "MISSING"}
+WORK_PROGRESS_KINDS = {
+    "none",
+    "admitted",
+    "dispatched",
+    "evidence_delta",
+    "terminal",
+}
+WORK_ADMISSION_RESULTS = {"ZERO", "NONZERO", "UNEXECUTED"}
 ADMISSION_BOOLEAN_FIELDS = {
     "external_mutation",
     "user_authorized",
@@ -378,6 +386,90 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                     errors.append(
                         f"{lifecycle_context}: delivered closure requires closure and liaison IDs"
                     )
+                work_lease = lifecycle.get("work_lease")
+                if work_lease is not None:
+                    lease_context = f"{lifecycle_context}.work_lease"
+                    if not isinstance(work_lease, dict):
+                        errors.append(f"{lease_context}: must be an object")
+                    else:
+                        lease_fields = [
+                            "action_id",
+                            "admission_id",
+                            "admission_result",
+                            "dispatched_task_id",
+                            "baseline_event_seq",
+                            "latest_event_seq",
+                            "progress_kind",
+                            "evidence_ids",
+                            "lease_renewed",
+                            "action_terminal",
+                        ]
+                        errors.extend(
+                            require_fields(work_lease, lease_fields, lease_context)
+                        )
+                        if all(field in work_lease for field in lease_fields):
+                            if not is_non_empty_string(work_lease["action_id"]):
+                                errors.append(
+                                    f"{lease_context}: action_id must be non-empty"
+                                )
+                            for field in (
+                                "admission_id",
+                                "dispatched_task_id",
+                            ):
+                                value = work_lease[field]
+                                if value is not None and not is_non_empty_string(value):
+                                    errors.append(
+                                        f"{lease_context}: {field} must be null or a non-empty string"
+                                    )
+                            admission_result = work_lease["admission_result"]
+                            if admission_result is not None and not is_enum_value(
+                                admission_result, WORK_ADMISSION_RESULTS
+                            ):
+                                errors.append(
+                                    f"{lease_context}: admission_result is invalid"
+                                )
+                            for field in ("baseline_event_seq", "latest_event_seq"):
+                                value = work_lease[field]
+                                if (
+                                    not isinstance(value, int)
+                                    or isinstance(value, bool)
+                                    or value < -1
+                                ):
+                                    errors.append(
+                                        f"{lease_context}: {field} must be an integer >= -1"
+                                    )
+                            baseline = work_lease["baseline_event_seq"]
+                            latest = work_lease["latest_event_seq"]
+                            if (
+                                isinstance(baseline, int)
+                                and not isinstance(baseline, bool)
+                                and isinstance(latest, int)
+                                and not isinstance(latest, bool)
+                                and latest < baseline
+                            ):
+                                errors.append(
+                                    f"{lease_context}: latest_event_seq cannot precede baseline_event_seq"
+                                )
+                            if not is_enum_value(
+                                work_lease["progress_kind"], WORK_PROGRESS_KINDS
+                            ):
+                                errors.append(
+                                    f"{lease_context}: progress_kind is invalid"
+                                )
+                            evidence_ids = work_lease["evidence_ids"]
+                            if not is_string_list(evidence_ids):
+                                errors.append(
+                                    f"{lease_context}: evidence_ids must be an array of non-empty strings"
+                                )
+                            elif len(evidence_ids) != len(set(evidence_ids)):
+                                errors.append(
+                                    f"{lease_context}: evidence_ids must be unique"
+                                )
+                            for field in ("lease_renewed", "action_terminal"):
+                                if not isinstance(work_lease[field], bool):
+                                    errors.append(
+                                        f"{lease_context}: {field} must be boolean"
+                                    )
 
     threads = topology["threads"]
     if not isinstance(threads, list) or not threads:
@@ -773,6 +865,59 @@ def audit_topology(
     if lifecycle is not None:
         phase = lifecycle["phase"]
         root = tasks.get(lifecycle["root_task_id"])
+        work_lease = lifecycle.get("work_lease")
+        qualifying_work_evidence = False
+        if isinstance(work_lease, dict):
+            progress_kind = work_lease["progress_kind"]
+            ledger_delta_proved = (
+                work_lease["latest_event_seq"] > work_lease["baseline_event_seq"]
+                and bool(work_lease["evidence_ids"])
+            )
+            admission_proved = (
+                work_lease["admission_result"] == "ZERO"
+                and work_lease["admission_id"] is not None
+                and ledger_delta_proved
+                and work_lease["admission_id"] in work_lease["evidence_ids"]
+            )
+            dispatch_proved = (
+                admission_proved
+                and work_lease["dispatched_task_id"] is not None
+                and work_lease["dispatched_task_id"] in tasks
+            )
+            qualifying_work_evidence = (
+                (progress_kind == "admitted" and admission_proved)
+                or (progress_kind == "dispatched" and dispatch_proved)
+                or (progress_kind == "evidence_delta" and ledger_delta_proved)
+                or (
+                    progress_kind == "terminal"
+                    and ledger_delta_proved
+                    and work_lease["action_terminal"]
+                )
+            )
+            if progress_kind != "none" and not qualifying_work_evidence:
+                finding(
+                    "WORK_LEASE_EVIDENCE_INVALID",
+                    "declared work progress is not backed by its required evidence",
+                    action_id=work_lease["action_id"],
+                    progress_kind=progress_kind,
+                )
+            if (
+                work_lease["dispatched_task_id"] is not None
+                and work_lease["dispatched_task_id"] not in tasks
+            ):
+                finding(
+                    "WORK_LEASE_DISPATCH_TARGET_MISSING",
+                    "a dispatched work lease must reference an authoritative task",
+                    action_id=work_lease["action_id"],
+                    dispatched_task_id=work_lease["dispatched_task_id"],
+                )
+            if work_lease["lease_renewed"] and not qualifying_work_evidence:
+                finding(
+                    "WORK_LEASE_RENEWED_WITHOUT_EVIDENCE",
+                    "an active work lease cannot renew without qualifying progress evidence",
+                    action_id=work_lease["action_id"],
+                    progress_kind=progress_kind,
+                )
         incomplete_project_ids = [
             project_id
             for project_id, project in projects.items()
@@ -797,6 +942,36 @@ def audit_topology(
                 "running control state requires one safe next action",
                 root_task_id=lifecycle["root_task_id"],
             )
+        if phase == "running" and work_lease is None:
+            finding(
+                "RUNNING_WITHOUT_WORK_LEASE",
+                "running control state requires an evidence-backed work lease",
+                root_task_id=lifecycle["root_task_id"],
+            )
+        if phase == "running" and work_lease is not None:
+            if not qualifying_work_evidence:
+                finding(
+                    "RUNNING_WITHOUT_WORK_EVIDENCE",
+                    "running control state must admit, dispatch, advance evidence, or terminate one action",
+                    root_task_id=lifecycle["root_task_id"],
+                    action_id=work_lease["action_id"],
+                )
+            if work_lease["action_terminal"]:
+                finding(
+                    "STALE_SAFE_NEXT_ACTION",
+                    "a terminal action cannot remain the running safe next action",
+                    action_id=work_lease["action_id"],
+                )
+            if (
+                lifecycle["automation_status"] == "ACTIVE"
+                and not work_lease["lease_renewed"]
+            ):
+                finding(
+                    "ACTIVE_AUTOMATION_WITHOUT_RENEWED_WORK_LEASE",
+                    "an active running monitor requires a renewed work lease",
+                    action_id=work_lease["action_id"],
+                    automation_id=lifecycle["automation_id"],
+                )
         if phase == "waiting" and not (
             lifecycle["pending_wait_id"] or lifecycle["pending_owner_request_id"]
         ):
@@ -804,6 +979,18 @@ def audit_topology(
                 "WAITING_WITHOUT_PENDING_EVENT",
                 "waiting control state requires an identified wait or owner request",
                 root_task_id=lifecycle["root_task_id"],
+            )
+        if (
+            phase == "waiting"
+            and lifecycle["automation_status"] == "ACTIVE"
+            and lifecycle["consecutive_no_change"] >= 1
+        ):
+            finding(
+                "WAITING_AUTOMATION_NOT_PAUSED_AFTER_EMPTY_CHECK",
+                "a waiting monitor must pause after its first empty check unless a new bounded poll is freshly admitted",
+                pending_wait_id=lifecycle["pending_wait_id"],
+                consecutive_no_change=lifecycle["consecutive_no_change"],
+                automation_id=lifecycle["automation_id"],
             )
         if phase == "complete" and incomplete_project_ids:
             finding(
@@ -820,13 +1007,13 @@ def audit_topology(
         if (
             incomplete_project_ids
             and phase == "running"
-            and lifecycle["consecutive_no_change"] >= 2
+            and lifecycle["consecutive_no_change"] >= 1
             and lifecycle["pending_wait_id"] is None
             and lifecycle["pending_owner_request_id"] is None
         ):
             finding(
                 "CONTROL_STALL_OWNER_ATTENTION_REQUIRED",
-                "repeated no-change runs without an identified wait require owner attention",
+                "one empty running monitor check without an identified wait requires owner attention",
                 consecutive_no_change=lifecycle["consecutive_no_change"],
                 incomplete_project_ids=incomplete_project_ids,
             )

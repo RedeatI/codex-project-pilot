@@ -20,8 +20,10 @@ to the sole migration controller; it never migrates a task based on a fixed numb
 of compactions or an invented token threshold.
 
 Control-lifecycle readbacks distinguish a finished turn from a finished portfolio.
-Monitors carry a liveness lease, escalate unowned no-change loops to the owner
-liaison once, and pause after a delivered attention or terminal handoff.
+An active running monitor must renew a machine-auditable work lease with admission,
+dispatch, ledger delta, or terminal evidence. Plans and timestamp-only snapshots do
+not count. The first empty running check escalates; the first empty waiting check
+pauses, preventing recurring automations from waking Root without advancing work.
 
 ## Install
 

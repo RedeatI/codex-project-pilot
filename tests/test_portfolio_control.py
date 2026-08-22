@@ -99,6 +99,18 @@ def valid_topology():
             "closure_id": None,
             "closure_delivered": False,
             "closure_owner_liaison_task_id": None,
+            "work_lease": {
+                "action_id": "alpha-action-1",
+                "admission_id": "alpha-admission-1",
+                "admission_result": "ZERO",
+                "dispatched_task_id": None,
+                "baseline_event_seq": 0,
+                "latest_event_seq": 1,
+                "progress_kind": "admitted",
+                "evidence_ids": ["alpha-admission-1"],
+                "lease_renewed": True,
+                "action_terminal": False,
+            },
         },
         "threads": [
             {
@@ -407,6 +419,99 @@ class PortfolioControlTests(unittest.TestCase):
         codes = {finding["code"] for finding in result["findings"]}
         self.assertIn("RUNNING_WITHOUT_SAFE_NEXT_ACTION", codes)
         self.assertIn("CONTROL_STALL_OWNER_ATTENTION_REQUIRED", codes)
+
+    def test_topology_audit_requires_running_work_lease(self):
+        topology = valid_topology()
+        del topology["control_lifecycle"]["work_lease"]
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "RUNNING_WITHOUT_WORK_LEASE",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_reused_admission_without_ledger_delta(self):
+        topology = valid_topology()
+        lease = topology["control_lifecycle"]["work_lease"]
+        lease["latest_event_seq"] = lease["baseline_event_seq"]
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("WORK_LEASE_EVIDENCE_INVALID", codes)
+        self.assertIn("WORK_LEASE_RENEWED_WITHOUT_EVIDENCE", codes)
+
+    def test_topology_audit_rejects_work_lease_renewal_without_evidence(self):
+        topology = valid_topology()
+        lease = topology["control_lifecycle"]["work_lease"]
+        lease.update(
+            {
+                "admission_id": None,
+                "admission_result": None,
+                "progress_kind": "none",
+                "evidence_ids": [],
+                "lease_renewed": True,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("RUNNING_WITHOUT_WORK_EVIDENCE", codes)
+        self.assertIn("WORK_LEASE_RENEWED_WITHOUT_EVIDENCE", codes)
+
+    def test_topology_audit_rejects_terminal_action_as_safe_next_action(self):
+        topology = valid_topology()
+        lease = topology["control_lifecycle"]["work_lease"]
+        lease.update(
+            {
+                "baseline_event_seq": 10,
+                "latest_event_seq": 11,
+                "progress_kind": "terminal",
+                "evidence_ids": ["event-11"],
+                "action_terminal": True,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "STALE_SAFE_NEXT_ACTION",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_accepts_authoritative_dispatch_work_lease(self):
+        topology = valid_topology()
+        lease = topology["control_lifecycle"]["work_lease"]
+        lease.update(
+            {
+                "dispatched_task_id": "alpha-owner",
+                "progress_kind": "dispatched",
+                "evidence_ids": ["alpha-admission-1", "dispatch-alpha-owner"],
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+
+    def test_topology_audit_pauses_waiting_monitor_after_first_empty_check(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle.update(
+            {
+                "phase": "waiting",
+                "safe_next_action": False,
+                "pending_wait_id": "external-job-1",
+                "consecutive_no_change": 1,
+            }
+        )
+        del lifecycle["work_lease"]
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "WAITING_AUTOMATION_NOT_PAUSED_AFTER_EMPTY_CHECK",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+        lifecycle["automation_status"] = "PAUSED"
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
 
     def test_topology_audit_requires_liaison_and_paused_terminal_monitor(self):
         topology = valid_topology()
