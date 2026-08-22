@@ -89,6 +89,10 @@ Set `authoritative` only from executor-owned runtime evidence. When
   create a successor or acquire the migration lock itself.
 - Prefer bounded waits and delta snapshots. Do not wake tasks merely to ask for
   unchanged status.
+- Give long-running monitors an explicit lifecycle and liveness lease. `idle` is not
+  terminal. Repeated no-change without an identified wait or owner request routes
+  once to the owner liaison, then pauses the monitor after delivery. Completion or
+  an explicit stop follows the same closure handshake.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,
   and mechanically decidable outcomes should remain terminal task records.
 - Distinguish `waiting` from `blocked`. Waiting has a known external event or user

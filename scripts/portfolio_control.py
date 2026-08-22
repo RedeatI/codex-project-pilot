@@ -33,6 +33,14 @@ THREAD_STATES = {
 }
 CONTEXT_PRESSURE_STATES = {"unknown", "normal", "watch", "renewal_required"}
 SUMMARY_QUALITY_FIELDS = ("short", "accurate", "usable")
+CONTROL_LIFECYCLE_PHASES = {
+    "running",
+    "waiting",
+    "owner_attention",
+    "complete",
+    "stopped",
+}
+AUTOMATION_STATUSES = {"ACTIVE", "PAUSED", "MISSING"}
 ADMISSION_BOOLEAN_FIELDS = {
     "external_mutation",
     "user_authorized",
@@ -310,6 +318,66 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             )
         if not isinstance(migration.get("lock_held"), bool):
             errors.append("topology.migration: lock_held must be boolean")
+
+    lifecycle = topology.get("control_lifecycle")
+    if lifecycle is not None:
+        lifecycle_context = "topology.control_lifecycle"
+        if not isinstance(lifecycle, dict):
+            errors.append(f"{lifecycle_context}: must be an object")
+        else:
+            lifecycle_fields = [
+                "phase",
+                "root_task_id",
+                "safe_next_action",
+                "pending_wait_id",
+                "pending_owner_request_id",
+                "consecutive_no_change",
+                "automation_id",
+                "automation_status",
+                "closure_id",
+                "closure_delivered",
+                "closure_owner_liaison_task_id",
+            ]
+            errors.extend(require_fields(lifecycle, lifecycle_fields, lifecycle_context))
+            if all(field in lifecycle for field in lifecycle_fields):
+                if not is_enum_value(lifecycle["phase"], CONTROL_LIFECYCLE_PHASES):
+                    errors.append(f"{lifecycle_context}: phase is invalid")
+                if not is_non_empty_string(lifecycle["root_task_id"]):
+                    errors.append(f"{lifecycle_context}: root_task_id must be non-empty")
+                if not isinstance(lifecycle["safe_next_action"], bool):
+                    errors.append(f"{lifecycle_context}: safe_next_action must be boolean")
+                for field in (
+                    "pending_wait_id",
+                    "pending_owner_request_id",
+                    "automation_id",
+                    "closure_id",
+                    "closure_owner_liaison_task_id",
+                ):
+                    value = lifecycle[field]
+                    if value is not None and not is_non_empty_string(value):
+                        errors.append(
+                            f"{lifecycle_context}: {field} must be null or a non-empty string"
+                        )
+                no_change = lifecycle["consecutive_no_change"]
+                if (
+                    not isinstance(no_change, int)
+                    or isinstance(no_change, bool)
+                    or no_change < 0
+                ):
+                    errors.append(
+                        f"{lifecycle_context}: consecutive_no_change must be a non-negative integer"
+                    )
+                if not is_enum_value(lifecycle["automation_status"], AUTOMATION_STATUSES):
+                    errors.append(f"{lifecycle_context}: automation_status is invalid")
+                if not isinstance(lifecycle["closure_delivered"], bool):
+                    errors.append(f"{lifecycle_context}: closure_delivered must be boolean")
+                if lifecycle["closure_delivered"] and (
+                    lifecycle["closure_id"] is None
+                    or lifecycle["closure_owner_liaison_task_id"] is None
+                ):
+                    errors.append(
+                        f"{lifecycle_context}: delivered closure requires closure and liaison IDs"
+                    )
 
     threads = topology["threads"]
     if not isinstance(threads, list) or not threads:
@@ -701,6 +769,94 @@ def audit_topology(
             active_target_task_id=target_task_id,
         )
 
+    lifecycle = topology.get("control_lifecycle")
+    if lifecycle is not None:
+        phase = lifecycle["phase"]
+        root = tasks.get(lifecycle["root_task_id"])
+        incomplete_project_ids = [
+            project_id
+            for project_id, project in projects.items()
+            if project["state"] != "complete"
+        ]
+        if root is None:
+            finding(
+                "CONTROL_LIFECYCLE_ROOT_MISSING",
+                "control lifecycle root_task_id is absent from the topology",
+                root_task_id=lifecycle["root_task_id"],
+            )
+        elif root["role"] != "root_controller":
+            finding(
+                "CONTROL_LIFECYCLE_ROOT_ROLE_MISMATCH",
+                "control lifecycle must reference the root controller",
+                root_task_id=lifecycle["root_task_id"],
+                observed_role=root["role"],
+            )
+        if phase == "running" and not lifecycle["safe_next_action"]:
+            finding(
+                "RUNNING_WITHOUT_SAFE_NEXT_ACTION",
+                "running control state requires one safe next action",
+                root_task_id=lifecycle["root_task_id"],
+            )
+        if phase == "waiting" and not (
+            lifecycle["pending_wait_id"] or lifecycle["pending_owner_request_id"]
+        ):
+            finding(
+                "WAITING_WITHOUT_PENDING_EVENT",
+                "waiting control state requires an identified wait or owner request",
+                root_task_id=lifecycle["root_task_id"],
+            )
+        if phase == "complete" and incomplete_project_ids:
+            finding(
+                "CONTROL_COMPLETE_WITH_INCOMPLETE_PROJECTS",
+                "control state cannot be complete while portfolio projects remain incomplete",
+                incomplete_project_ids=incomplete_project_ids,
+            )
+        if phase in {"complete", "stopped"} and lifecycle["safe_next_action"]:
+            finding(
+                "TERMINAL_CONTROL_WITH_SAFE_NEXT_ACTION",
+                "complete or stopped control state cannot retain a safe next action",
+                phase=phase,
+            )
+        if (
+            incomplete_project_ids
+            and phase == "running"
+            and lifecycle["consecutive_no_change"] >= 2
+            and lifecycle["pending_wait_id"] is None
+            and lifecycle["pending_owner_request_id"] is None
+        ):
+            finding(
+                "CONTROL_STALL_OWNER_ATTENTION_REQUIRED",
+                "repeated no-change runs without an identified wait require owner attention",
+                consecutive_no_change=lifecycle["consecutive_no_change"],
+                incomplete_project_ids=incomplete_project_ids,
+            )
+        if phase in {"owner_attention", "complete", "stopped"}:
+            if not lifecycle["closure_delivered"]:
+                finding(
+                    "OWNER_LIAISON_HANDOFF_REQUIRED",
+                    "attention or terminal control state requires one delivered owner-liaison handoff",
+                    phase=phase,
+                    closure_id=lifecycle["closure_id"],
+                )
+            else:
+                liaison = tasks.get(lifecycle["closure_owner_liaison_task_id"])
+                if liaison is None or liaison["role"] != "owner_liaison":
+                    finding(
+                        "CONTROL_CLOSURE_WRONG_LIAISON",
+                        "control closure must be delivered to the declared owner liaison",
+                        closure_owner_liaison_task_id=lifecycle[
+                            "closure_owner_liaison_task_id"
+                        ],
+                        observed_role=None if liaison is None else liaison["role"],
+                    )
+            if lifecycle["automation_status"] == "ACTIVE":
+                finding(
+                    "TERMINAL_AUTOMATION_NOT_PAUSED",
+                    "attention or terminal control state requires the monitor automation to pause",
+                    phase=phase,
+                    automation_id=lifecycle["automation_id"],
+                )
+
     return {
         "schema_version": TOPOLOGY_AUDIT_SCHEMA,
         "ok": not findings,
@@ -710,6 +866,7 @@ def audit_topology(
         "active_turn_count": len(active_threads),
         "writer_counts": dict(sorted(writer_counts.items())),
         "context_pressure_counts": dict(sorted(context_pressure_counts.items())),
+        "control_phase": None if lifecycle is None else lifecycle["phase"],
         "finding_count": len(findings),
         "findings": findings,
     }

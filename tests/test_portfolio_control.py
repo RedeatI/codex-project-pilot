@@ -87,6 +87,19 @@ def valid_topology():
             "active_target_task_id": None,
             "lock_held": False,
         },
+        "control_lifecycle": {
+            "phase": "running",
+            "root_task_id": "root-1",
+            "safe_next_action": True,
+            "pending_wait_id": None,
+            "pending_owner_request_id": None,
+            "consecutive_no_change": 0,
+            "automation_id": "portfolio-heartbeat",
+            "automation_status": "ACTIVE",
+            "closure_id": None,
+            "closure_delivered": False,
+            "closure_owner_liaison_task_id": None,
+        },
         "threads": [
             {
                 "task_id": "root-1",
@@ -373,6 +386,75 @@ class PortfolioControlTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn(
             "CONTEXT_RENEWAL_WRONG_NOTIFICATION_TARGET",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_does_not_treat_idle_root_as_terminal(self):
+        topology = valid_topology()
+        topology["threads"][0]["state"] = "idle"
+        topology["threads"][0]["active_turn"] = False
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["control_phase"], "running")
+
+    def test_topology_audit_escalates_repeated_unowned_no_change(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle["safe_next_action"] = False
+        lifecycle["consecutive_no_change"] = 2
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("RUNNING_WITHOUT_SAFE_NEXT_ACTION", codes)
+        self.assertIn("CONTROL_STALL_OWNER_ATTENTION_REQUIRED", codes)
+
+    def test_topology_audit_requires_liaison_and_paused_terminal_monitor(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle["phase"] = "owner_attention"
+        lifecycle["safe_next_action"] = False
+        lifecycle["closure_id"] = "closure-1"
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("OWNER_LIAISON_HANDOFF_REQUIRED", codes)
+        self.assertIn("TERMINAL_AUTOMATION_NOT_PAUSED", codes)
+
+    def test_topology_audit_accepts_delivered_owner_attention_closure(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle.update(
+            {
+                "phase": "owner_attention",
+                "safe_next_action": False,
+                "pending_owner_request_id": "closure-1",
+                "consecutive_no_change": 3,
+                "automation_status": "PAUSED",
+                "closure_id": "closure-1",
+                "closure_delivered": True,
+                "closure_owner_liaison_task_id": "liaison-1",
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+
+    def test_topology_audit_rejects_false_portfolio_completion(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle.update(
+            {
+                "phase": "complete",
+                "safe_next_action": False,
+                "automation_status": "PAUSED",
+                "closure_id": "closure-1",
+                "closure_delivered": True,
+                "closure_owner_liaison_task_id": "liaison-1",
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "CONTROL_COMPLETE_WITH_INCOMPLETE_PROJECTS",
             {finding["code"] for finding in result["findings"]},
         )
 

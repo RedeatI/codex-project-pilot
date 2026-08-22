@@ -67,6 +67,46 @@ Normalize runtime status to one of:
 Use `waiting` for a known external event or user action. Use `blocked` for missing
 authority or no viable next action. An `active_turn` must use `state=active`.
 
+## Control lifecycle and monitor closure
+
+Executor `idle` means that one turn ended. It does not prove that Root stopped or
+that the portfolio completed. Maintain an explicit `control_lifecycle` readback:
+
+```json
+{
+  "phase": "owner_attention",
+  "root_task_id": "root-1",
+  "safe_next_action": false,
+  "pending_wait_id": null,
+  "pending_owner_request_id": "closure-1",
+  "consecutive_no_change": 3,
+  "automation_id": "portfolio-heartbeat",
+  "automation_status": "PAUSED",
+  "closure_id": "closure-1",
+  "closure_delivered": true,
+  "closure_owner_liaison_task_id": "liaison-1"
+}
+```
+
+Use these phases:
+
+- `running`: one authorized, admitted, safe next action exists.
+- `waiting`: an identified external event or delivered owner request exists.
+- `owner_attention`: the portfolio is incomplete but has no safe next action,
+  identified wait, or valid owner request.
+- `complete`: every portfolio requirement has authoritative completion evidence.
+- `stopped`: the user or Root explicitly stopped, or terminal evidence proves that
+  control cannot continue.
+
+Track a liveness lease with the no-change streak and pending IDs. Two consecutive
+no-change runs on an incomplete portfolio, without an identified wait or owner
+request, require `owner_attention`; do not wake Root forever. For
+`owner_attention`, `complete`, or `stopped`, send exactly one deduplicated closure
+packet to the declared owner liaison. After delivery, pause the monitor automation.
+Keep its configuration and evidence so a later user decision can resume it through
+fresh admission. Never infer a terminal phase from `idle`, a completed command, or
+one no-change result.
+
 ## Context health and renewal notification
 
 Treat context pressure as runtime topology state, not as a fixed compaction count or
@@ -195,6 +235,7 @@ checks:
 - manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;
 - migration controller, target, and lock consistency;
+- Root lifecycle, liveness lease, owner-liaison closure, and monitor pause state;
 - context summary quality, renewal classification, and notification routing;
 - tasks that reference projects absent from the manifest.
 

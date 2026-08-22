@@ -19,6 +19,10 @@ context warnings auditable. Scheduling emits one deduplicated renewal recommenda
 to the sole migration controller; it never migrates a task based on a fixed number
 of compactions or an invented token threshold.
 
+Control-lifecycle readbacks distinguish a finished turn from a finished portfolio.
+Monitors carry a liveness lease, escalate unowned no-change loops to the owner
+liaison once, and pause after a delivered attention or terminal handoff.
+
 ## Install
 
 Requires Python 3.10 or newer for the deterministic control script.

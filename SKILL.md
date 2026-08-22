@@ -33,7 +33,9 @@ host identity, or evidence boundaries.
 6. Monitor deltas, not full transcripts. Classify approval, missing authority,
    host mismatch, harness failure, product failure, and external-state waiting as
    different outcomes. Deduplicate context-renewal notifications by target and
-   notification ID.
+   notification ID. Treat runtime idle as turn completion, not portfolio completion.
+   Give recurring monitors a liveness lease: repeated no-change without an identified
+   wait or owner request routes once to the owner liaison, then pauses after delivery.
 7. Append material decisions and terminal results to the hash-chained portfolio
    ledger. Recompute the next action from current evidence and continue while safe.
 8. Claim completion only after every requirement has authoritative evidence. Keep
