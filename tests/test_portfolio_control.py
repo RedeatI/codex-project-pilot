@@ -298,6 +298,15 @@ class PortfolioControlTests(unittest.TestCase):
             {finding["code"] for finding in result["findings"]},
         )
 
+    def test_topology_audit_accepts_managed_worktree_with_canonical_root(self):
+        manifest = valid_manifest()
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = valid_topology()
+        topology["threads"][-1]["root"] = str(Path.cwd() / "managed-worktree")
+        topology["threads"][-1]["canonical_project_root"] = str(Path.cwd())
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertTrue(result["ok"])
+
     def test_hash_chained_append_and_verify(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

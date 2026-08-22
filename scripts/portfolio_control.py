@@ -345,6 +345,13 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         project_id = thread["project_id"]
         if project_id is not None and not is_non_empty_string(project_id):
             errors.append(f"{context}: project_id must be null or a non-empty string")
+        canonical_project_root = thread.get("canonical_project_root")
+        if canonical_project_root is not None and not is_non_empty_string(
+            canonical_project_root
+        ):
+            errors.append(
+                f"{context}: canonical_project_root must be null or a non-empty string"
+            )
         if not is_enum_value(thread["state"], THREAD_STATES):
             errors.append(f"{context}: state is invalid")
         for field in ("active_turn", "writer", "provisional"):
@@ -512,15 +519,22 @@ def audit_topology(
                 observed_host_id=owner["host_id"],
             )
         expected_root = canonical_root(project["root"], project["host_scope"])
-        observed_root = canonical_root(owner["root"], project["host_scope"])
-        if expected_root != observed_root:
+        observed_roots = [owner["root"]]
+        if owner.get("canonical_project_root") is not None:
+            observed_roots.append(owner["canonical_project_root"])
+        root_matches = any(
+            expected_root == canonical_root(root, project["host_scope"])
+            for root in observed_roots
+        )
+        if not root_matches:
             finding(
                 "OWNER_ROOT_MISMATCH",
-                "manifest owner task uses a different canonical root",
+                "manifest root matches neither the execution root nor its canonical project root",
                 project_id=project_id,
                 owner_task_id=owner_task_id,
                 expected_root=project["root"],
-                observed_root=owner["root"],
+                observed_execution_root=owner["root"],
+                observed_canonical_project_root=owner.get("canonical_project_root"),
             )
 
     migration = topology["migration"]

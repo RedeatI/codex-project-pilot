@@ -120,6 +120,7 @@ Create a JSON snapshot from current runtime metadata:
       "project_id": null,
       "host_id": "local",
       "root": "D:\\control",
+      "canonical_project_root": null,
       "state": "idle",
       "active_turn": false,
       "writer": false,
@@ -133,6 +134,13 @@ Create a JSON snapshot from current runtime metadata:
 `authoritative=true` is valid only when task IDs, host IDs, roots, and statuses came
 from current executor metadata. A handoff, report, path string, or task title alone
 is not authoritative readback.
+
+`root` is the task's current execution root. For a managed Git worktree it may
+differ from the manifest's canonical project root. In that case, set optional
+`canonical_project_root` only after runtime metadata or Git worktree readback proves
+the relationship. The owner-root audit accepts either an exact execution-root match
+or a proven canonical-project-root match; it never infers equivalence from similar
+directory names.
 
 ## Audit and routing
 
@@ -148,7 +156,7 @@ checks:
 - required control-role presence, multiplicity, and authorities;
 - active-turn capacity and status consistency;
 - one writer lease per project;
-- manifest owner identity, project, host, root, and writer lease;
+- manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;
 - migration controller, target, and lock consistency;
 - tasks that reference projects absent from the manifest.
