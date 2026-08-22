@@ -307,6 +307,75 @@ class PortfolioControlTests(unittest.TestCase):
         result = CONTROL.audit_topology(manifest, topology)
         self.assertTrue(result["ok"])
 
+    def test_topology_audit_requires_summary_quality_after_compaction(self):
+        topology = valid_topology()
+        topology["threads"][1]["context_health"] = {
+            "pressure": "watch",
+            "signals": ["compaction_observed"],
+            "compaction_observed": True,
+            "summary_quality": None,
+            "controller_notified": False,
+            "notification_target_task_id": None,
+            "notification_id": None,
+        }
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "CONTEXT_SUMMARY_QUALITY_MISSING",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_requires_context_renewal_notification(self):
+        topology = valid_topology()
+        topology["threads"][1]["context_health"] = {
+            "pressure": "renewal_required",
+            "signals": ["summary_missing_next_action"],
+            "compaction_observed": True,
+            "summary_quality": {"short": True, "accurate": True, "usable": False},
+            "controller_notified": False,
+            "notification_target_task_id": None,
+            "notification_id": None,
+        }
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "CONTEXT_RENEWAL_NOTIFICATION_REQUIRED",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_accepts_deduplicated_controller_notification(self):
+        topology = valid_topology()
+        topology["threads"][1]["context_health"] = {
+            "pressure": "renewal_required",
+            "signals": ["runtime_context_warning"],
+            "compaction_observed": False,
+            "summary_quality": None,
+            "controller_notified": True,
+            "notification_target_task_id": "runtime-1",
+            "notification_id": "context-renewal-scheduler-1-20260823t010000z",
+        }
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["context_pressure_counts"], {"renewal_required": 1})
+
+    def test_topology_audit_rejects_wrong_context_notification_target(self):
+        topology = valid_topology()
+        topology["threads"][1]["context_health"] = {
+            "pressure": "renewal_required",
+            "signals": ["runtime_context_warning"],
+            "compaction_observed": False,
+            "summary_quality": None,
+            "controller_notified": True,
+            "notification_target_task_id": "root-1",
+            "notification_id": "context-renewal-scheduler-1-20260823t010000z",
+        }
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "CONTEXT_RENEWAL_WRONG_NOTIFICATION_TARGET",
+            {finding["code"] for finding in result["findings"]},
+        )
+
     def test_hash_chained_append_and_verify(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

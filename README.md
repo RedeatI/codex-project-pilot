@@ -14,6 +14,11 @@ project execution. Runtime snapshots make duplicate control roles, stale owners,
 unfenced migrations, excess active turns, and multiple project writers visible
 before they become coordination failures.
 
+Optional per-task context-health readbacks make summary degradation and runtime
+context warnings auditable. Scheduling emits one deduplicated renewal recommendation
+to the sole migration controller; it never migrates a task based on a fixed number
+of compactions or an invented token threshold.
+
 ## Install
 
 Requires Python 3.10 or newer for the deterministic control script.

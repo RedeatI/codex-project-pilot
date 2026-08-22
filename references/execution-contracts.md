@@ -83,6 +83,10 @@ Set `authoritative` only from executor-owned runtime evidence. When
 - Use one controller and a fenced lock for task migrations or shared portfolio
   state. A successor must accept its compact handoff before the old task is
   archived.
+- Monitor context pressure from authoritative runtime signals and the
+  short/accurate/usable summary gate. When renewal is required, the scheduler sends
+  one deduplicated recommendation to the sole migration controller; it does not
+  create a successor or acquire the migration lock itself.
 - Prefer bounded waits and delta snapshots. Do not wake tasks merely to ask for
   unchanged status.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,

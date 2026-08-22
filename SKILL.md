@@ -20,6 +20,10 @@ host identity, or evidence boundaries.
    portfolio. Separate control-plane roles from project writers, keep one writer
    lease per project, cap active turns, and serialize migrations or shared-state
    changes.
+   Treat context pressure as topology state: after compaction, audit the summary as
+   short/accurate/usable. If renewal is required, notify the sole migration
+   controller once; never use a fixed compaction count or let scheduling launch the
+   migration.
 4. Before dispatch or mutation, evaluate the action against runtime readback. Use
    `scripts/portfolio_control.py admit` when the action crosses hosts, writes a
    repository, changes external state, or resumes after uncertain context.
@@ -28,7 +32,8 @@ host identity, or evidence boundaries.
    status chatter.
 6. Monitor deltas, not full transcripts. Classify approval, missing authority,
    host mismatch, harness failure, product failure, and external-state waiting as
-   different outcomes.
+   different outcomes. Deduplicate context-renewal notifications by target and
+   notification ID.
 7. Append material decisions and terminal results to the hash-chained portfolio
    ledger. Recompute the next action from current evidence and continue while safe.
 8. Claim completion only after every requirement has authoritative evidence. Keep

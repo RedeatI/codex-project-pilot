@@ -67,6 +67,42 @@ Normalize runtime status to one of:
 Use `waiting` for a known external event or user action. Use `blocked` for missing
 authority or no viable next action. An `active_turn` must use `state=active`.
 
+## Context health and renewal notification
+
+Treat context pressure as runtime topology state, not as a fixed compaction count or
+invented token threshold. When executor-owned metadata exposes a context warning,
+record it. After any compaction, audit the retained summary as `short`, `accurate`,
+and `usable`. Repetition, stale or contradictory identities, missing authority or
+candidate facts, and the absence of one unambiguous next action are renewal signals.
+
+Each task may carry an optional `context_health` readback:
+
+```json
+{
+  "pressure": "renewal_required",
+  "signals": ["summary_missing_next_action"],
+  "compaction_observed": true,
+  "summary_quality": {"short": true, "accurate": true, "usable": false},
+  "controller_notified": false,
+  "notification_target_task_id": null,
+  "notification_id": null
+}
+```
+
+`pressure` is `unknown`, `normal`, `watch`, or `renewal_required`. A compaction
+requires an explicit summary-quality audit. Any failed summary gate requires
+`renewal_required`; so does an authoritative runtime context warning that makes the
+next substantial action unsafe. A phase boundary or compaction count alone may be
+`watch`, but never mechanically forces renewal.
+
+The scheduler sends exactly one compact `MIGRATION_RECOMMENDED` packet for each new
+`renewal_required` observation. It includes the target task ID, signals, failed
+summary gates, host/role/frozen settings, retained evidence, and one next action.
+Only a delivered readback sets `controller_notified=true`, with the sole migration
+controller task ID and a stable `notification_id` used for deduplication. The
+scheduler never acquires the migration lock, creates the successor, transfers a
+writer lease, or archives the old task.
+
 For renewal or migration:
 
 1. The runtime supervisor acquires the one migration lock and records one target.
@@ -159,6 +195,7 @@ checks:
 - manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;
 - migration controller, target, and lock consistency;
+- context summary quality, renewal classification, and notification routing;
 - tasks that reference projects absent from the manifest.
 
 An audit failure is not permission to archive, delete, migrate, or rewrite the

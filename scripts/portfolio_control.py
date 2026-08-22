@@ -31,6 +31,8 @@ THREAD_STATES = {
     "retired",
     "unavailable",
 }
+CONTEXT_PRESSURE_STATES = {"unknown", "normal", "watch", "renewal_required"}
+SUMMARY_QUALITY_FIELDS = ("short", "accurate", "usable")
 ADMISSION_BOOLEAN_FIELDS = {
     "external_mutation",
     "user_authorized",
@@ -361,6 +363,72 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             errors.append(f"{context}: authorities must be an array of strings")
         elif len(thread["authorities"]) != len(set(thread["authorities"])):
             errors.append(f"{context}: authorities must not contain duplicates")
+        context_health = thread.get("context_health")
+        if context_health is None:
+            continue
+        health_context = f"{context}.context_health"
+        if not isinstance(context_health, dict):
+            errors.append(f"{health_context}: must be an object")
+            continue
+        health_fields = [
+            "pressure",
+            "signals",
+            "compaction_observed",
+            "summary_quality",
+            "controller_notified",
+            "notification_target_task_id",
+            "notification_id",
+        ]
+        errors.extend(require_fields(context_health, health_fields, health_context))
+        if any(field not in context_health for field in health_fields):
+            continue
+        if not is_enum_value(context_health["pressure"], CONTEXT_PRESSURE_STATES):
+            errors.append(f"{health_context}: pressure is invalid")
+        signals = context_health["signals"]
+        if not is_string_list(signals):
+            errors.append(f"{health_context}: signals must be an array of strings")
+        elif len(signals) != len(set(signals)):
+            errors.append(f"{health_context}: signals must not contain duplicates")
+        if not isinstance(context_health["compaction_observed"], bool):
+            errors.append(f"{health_context}: compaction_observed must be boolean")
+        summary_quality = context_health["summary_quality"]
+        if summary_quality is not None:
+            if not isinstance(summary_quality, dict):
+                errors.append(f"{health_context}: summary_quality must be null or an object")
+            else:
+                errors.extend(
+                    require_fields(
+                        summary_quality,
+                        list(SUMMARY_QUALITY_FIELDS),
+                        f"{health_context}.summary_quality",
+                    )
+                )
+                for field in SUMMARY_QUALITY_FIELDS:
+                    if field in summary_quality and not isinstance(summary_quality[field], bool):
+                        errors.append(
+                            f"{health_context}.summary_quality: {field} must be boolean"
+                        )
+        notified = context_health["controller_notified"]
+        if not isinstance(notified, bool):
+            errors.append(f"{health_context}: controller_notified must be boolean")
+        notification_target = context_health["notification_target_task_id"]
+        notification_id = context_health["notification_id"]
+        if notification_target is not None and not is_non_empty_string(notification_target):
+            errors.append(
+                f"{health_context}: notification_target_task_id must be null or a non-empty string"
+            )
+        if notification_id is not None and not is_non_empty_string(notification_id):
+            errors.append(
+                f"{health_context}: notification_id must be null or a non-empty string"
+            )
+        if notified is True and (notification_target is None or notification_id is None):
+            errors.append(
+                f"{health_context}: a delivered notification requires target and notification ID"
+            )
+        if notified is False and (notification_target is not None or notification_id is not None):
+            errors.append(
+                f"{health_context}: an undelivered notification cannot retain target or notification ID"
+            )
     return errors
 
 
@@ -385,6 +453,7 @@ def audit_topology(
     projects = {project["id"]: project for project in manifest["projects"]}
     tasks = {thread["task_id"]: thread for thread in threads}
     active_threads = [thread for thread in threads if thread["active_turn"]]
+    context_pressure_counts: Counter[str] = Counter()
 
     if not topology["authoritative"]:
         finding(
@@ -464,6 +533,66 @@ def audit_topology(
                 "task references a project absent from the manifest",
                 task_id=thread["task_id"],
                 project_id=project_id,
+            )
+        context_health = thread.get("context_health")
+        if context_health is None:
+            continue
+        pressure = context_health["pressure"]
+        context_pressure_counts[pressure] += 1
+        summary_quality = context_health["summary_quality"]
+        if context_health["compaction_observed"] and summary_quality is None:
+            finding(
+                "CONTEXT_SUMMARY_QUALITY_MISSING",
+                "a compacted task requires a short/accurate/usable summary audit",
+                task_id=thread["task_id"],
+                pressure=pressure,
+            )
+        failed_summary_gates = (
+            [
+                field
+                for field in SUMMARY_QUALITY_FIELDS
+                if summary_quality is not None and not summary_quality[field]
+            ]
+            if summary_quality is not None
+            else []
+        )
+        if failed_summary_gates and pressure != "renewal_required":
+            finding(
+                "CONTEXT_PRESSURE_UNDERCLASSIFIED",
+                "failed summary-quality gates require renewal_required context pressure",
+                task_id=thread["task_id"],
+                pressure=pressure,
+                failed_summary_gates=failed_summary_gates,
+            )
+        if pressure == "renewal_required" and not context_health["signals"]:
+            finding(
+                "CONTEXT_RENEWAL_WITHOUT_SIGNAL",
+                "renewal_required needs at least one authoritative pressure signal",
+                task_id=thread["task_id"],
+            )
+        if pressure == "renewal_required" and not context_health["controller_notified"]:
+            finding(
+                "CONTEXT_RENEWAL_NOTIFICATION_REQUIRED",
+                "the scheduler must notify the sole migration controller once",
+                task_id=thread["task_id"],
+                controller_task_id=topology["migration"]["controller_task_id"],
+                signals=context_health["signals"],
+                failed_summary_gates=failed_summary_gates,
+            )
+        if (
+            context_health["controller_notified"]
+            and context_health["notification_target_task_id"]
+            != topology["migration"]["controller_task_id"]
+        ):
+            finding(
+                "CONTEXT_RENEWAL_WRONG_NOTIFICATION_TARGET",
+                "context-renewal notification must target the sole migration controller",
+                task_id=thread["task_id"],
+                expected_controller_task_id=topology["migration"]["controller_task_id"],
+                observed_notification_target_task_id=context_health[
+                    "notification_target_task_id"
+                ],
+                notification_id=context_health["notification_id"],
             )
 
     for project_id, count in sorted(writer_counts.items()):
@@ -580,6 +709,7 @@ def audit_topology(
         "thread_count": len(threads),
         "active_turn_count": len(active_threads),
         "writer_counts": dict(sorted(writer_counts.items())),
+        "context_pressure_counts": dict(sorted(context_pressure_counts.items())),
         "finding_count": len(findings),
         "findings": findings,
     }
