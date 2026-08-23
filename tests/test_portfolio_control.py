@@ -161,6 +161,7 @@ def enable_v25_proactive_project_sweep(manifest):
                 "GOVERNANCE_GOAL_CONFLICT",
             ],
             "notification_fields": [
+                "request_id",
                 "affected_projects",
                 "root_cause",
                 "architecture_options",
@@ -172,6 +173,61 @@ def enable_v25_proactive_project_sweep(manifest):
             "ordinary_single_project_failure_is_project_local": True,
             "major_project_architecture_remains_owner_gate": True,
         },
+    }
+    autonomy["owner_liaison_routing"] = {
+        "schema": "OWNER_LIAISON_ROUTING_V1",
+        "liaison_task_id": "01a013cd-60f1-7f73-974e-3663f7297ad2",
+        "decision_categories": [
+            "authority_escalation",
+            "credential_or_private_data",
+            "external_publication_or_deployment",
+            "destructive_or_irreversible_external_write",
+            "cross_host_or_migration",
+            "major_architecture",
+            "desktop_login_or_account",
+        ],
+        "request_fields": [
+            "request_id",
+            "blocker",
+            "authority_or_evidence",
+            "minimal_options",
+            "recommendation",
+            "next",
+        ],
+        "delivery_readback_fields": [
+            "delivery_status",
+            "delivery_readback_id",
+            "delivery_turn_id",
+            "response_request_id",
+            "response_router",
+            "project_owner_reference_task_id",
+        ],
+        "request_creator_roles": [
+            "root_controller",
+            "scheduler",
+            "runtime_supervisor",
+            "project_owner",
+        ],
+        "deduplicate_by": "request_id",
+        "liaison_is_sole_user_decision_channel": True,
+        "requesters_create_or_reference_only": True,
+        "delivery_readback_required": True,
+        "delivery_turn_required": True,
+        "ordinary_project_recovery_must_not_escalate": True,
+        "ordinary_project_recovery_categories": [
+            "mechanical_recovery",
+            "path_recovery",
+            "harness_recovery",
+            "small_project_architecture",
+        ],
+        "canonical_id_field": "request_id",
+        "request_aliases_allowed": True,
+        "same_request_id_response_required": True,
+        "response_router_roles": [
+            "governance_response_router",
+            "runtime_response_router",
+        ],
+        "exact_project_owner_reference_only": True,
     }
     for project in manifest["projects"]:
         project["goal_contract"] = {
@@ -207,6 +263,22 @@ def enable_v25_proactive_project_sweep(manifest):
             "next_stage_trigger": "STAGE_TERMINAL",
             "roll_forward_required": True,
             "ordinary_recovery_autonomous": True,
+            "diagnosis_triggers": [
+                "goal_stalled",
+                "thread_idle",
+                "completed_empty_output",
+            ],
+            "diagnose_and_resume_required": True,
+            "turn_stop_idle_empty_never_project_completion": True,
+            "status_only_progress_forbidden": True,
+            "independent_recovery_categories": [
+                "feature",
+                "integration",
+                "test",
+                "documentation",
+                "performance",
+                "evidence",
+            ],
         }
     return manifest
 
@@ -244,11 +316,41 @@ def add_v25_heartbeat_project_sweep(manifest, topology):
                 ],
                 "stage_terminal": False,
                 "goal_rolled_forward": False,
+                "goal_diagnosis_trigger": None,
+                "goal_recovery_action": None,
             }
         ],
         "control_plane_escalation": None,
         "global_decision": "RUNNING",
     }
+    return topology
+
+
+def add_owner_liaison_request(topology, delivery_status="PENDING"):
+    delivered = delivery_status == "DELIVERED"
+    topology["owner_liaison_requests"] = [
+        {
+            "request_id": "owner-request-alpha-1",
+            "request_aliases": ["legacy-owner-request-alpha"],
+            "category": "authority_escalation",
+            "requester_task_id": "alpha-owner",
+            "liaison_task_id": "01a013cd-60f1-7f73-974e-3663f7297ad2",
+            "blocker": "the next stage requires an authority not granted to the project",
+            "authority_or_evidence": "manifest-authority-readback-alpha-1",
+            "minimal_options": [
+                "grant the narrow authority",
+                "retain authority and defer the stage",
+            ],
+            "recommendation": "grant the narrow authority",
+            "next": "fresh-admit the stage after the liaison delivery readback",
+            "delivery_status": delivery_status,
+            "delivery_readback_id": "owner-delivery-alpha-1" if delivered else None,
+            "delivery_turn_id": "owner-turn-alpha-1" if delivered else None,
+            "response_request_id": "owner-request-alpha-1" if delivered else None,
+            "response_router": "runtime_response_router" if delivered else None,
+            "project_owner_reference_task_id": "alpha-owner" if delivered else None,
+        }
+    ]
     return topology
 
 
@@ -473,6 +575,76 @@ class PortfolioControlTests(unittest.TestCase):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
         self.assertEqual(CONTROL.validate_manifest(manifest), [])
 
+    def test_manifest_v25_requires_unified_owner_liaison_routing(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        del manifest["policy"]["project_owner_autonomy"]["owner_liaison_routing"]
+        self.assertIn(
+            "policy.project_owner_autonomy: PROJECT_TASK_CONTRACT_V2_5 requires owner_liaison_routing",
+            CONTROL.validate_manifest(manifest),
+        )
+
+    def test_manifest_v25_requires_the_configured_owner_liaison_task(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"]["owner_liaison_routing"][
+            "liaison_task_id"
+        ] = "some-other-task"
+        self.assertIn(
+            "policy.project_owner_autonomy.owner_liaison_routing: liaison_task_id must be 01a013cd-60f1-7f73-974e-3663f7297ad2",
+            CONTROL.validate_manifest(manifest),
+        )
+
+    def test_manifest_v25_forbids_ordinary_recovery_in_owner_decisions(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        routing = manifest["policy"]["project_owner_autonomy"][
+            "owner_liaison_routing"
+        ]
+        routing["decision_categories"].append("mechanical_recovery")
+        self.assertIn(
+            "policy.project_owner_autonomy.owner_liaison_routing: decision_categories must list the exact decision categories",
+            CONTROL.validate_manifest(manifest),
+        )
+
+    def test_topology_accepts_pending_and_delivered_owner_liaison_requests(self):
+        pending = add_owner_liaison_request(valid_topology())
+        self.assertEqual(CONTROL.validate_topology(pending), [])
+        delivered = add_owner_liaison_request(valid_topology(), "DELIVERED")
+        self.assertEqual(CONTROL.validate_topology(delivered), [])
+
+    def test_topology_rejects_duplicate_owner_request_aliases(self):
+        topology = add_owner_liaison_request(valid_topology())
+        duplicate = copy.deepcopy(topology["owner_liaison_requests"][0])
+        duplicate.update(
+            {
+                "request_id": "owner-request-beta-1",
+                "request_aliases": ["legacy-owner-request-alpha"],
+            }
+        )
+        topology["owner_liaison_requests"].append(duplicate)
+        self.assertTrue(
+            any(
+                "request alias collides" in error
+                for error in CONTROL.validate_topology(topology)
+            )
+        )
+
+    def test_topology_rejects_ordinary_mechanical_owner_request(self):
+        topology = add_owner_liaison_request(valid_topology())
+        topology["owner_liaison_requests"][0]["category"] = "mechanical_recovery"
+        self.assertIn(
+            "topology.owner_liaison_requests[0]: category is not owner-only",
+            CONTROL.validate_topology(topology),
+        )
+
+    def test_topology_requires_same_request_id_response_routing(self):
+        topology = add_owner_liaison_request(valid_topology(), "DELIVERED")
+        topology["owner_liaison_requests"][0][
+            "response_request_id"
+        ] = "different-request"
+        self.assertIn(
+            "topology.owner_liaison_requests[0]: DELIVERED requires readback/turn IDs and a same-request-id governance/runtime response route",
+            CONTROL.validate_topology(topology),
+        )
+
     def test_manifest_v25_requires_project_goal_contract(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
         del manifest["projects"][0]["goal_contract"]
@@ -503,6 +675,21 @@ class PortfolioControlTests(unittest.TestCase):
         self.assertIn(
             "projects[0].goal_contract: autonomous_decision_scope must include the required ordinary implementation and recovery categories",
             CONTROL.validate_manifest(manifest),
+        )
+
+    def test_manifest_v25_requires_goal_diagnosis_and_non_status_progress(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        goal = manifest["projects"][0]["goal_contract"]
+        goal["diagnosis_triggers"].remove("completed_empty_output")
+        goal["status_only_progress_forbidden"] = False
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "projects[0].goal_contract: diagnosis_triggers must list the exact goal-stall, idle, and completed-empty triggers",
+            errors,
+        )
+        self.assertIn(
+            "projects[0].goal_contract: status_only_progress_forbidden must be true",
+            errors,
         )
 
     def test_manifest_validation_keeps_v24_compatible_without_project_sweep(self):
@@ -740,6 +927,34 @@ class PortfolioControlTests(unittest.TestCase):
         result = CONTROL.audit_topology(manifest, topology)
         self.assertTrue(result["ok"])
 
+    def test_v25_topology_audit_resolves_canonical_owner_request_alias(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        add_owner_liaison_request(topology)
+        topology["control_lifecycle"][
+            "pending_owner_request_id"
+        ] = "legacy-owner-request-alpha"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertNotIn(
+            "OWNER_LIAISON_PENDING_REQUEST_MISSING",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_v25_topology_audit_rejects_non_owner_response_reference(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        add_owner_liaison_request(topology, "DELIVERED")
+        topology["owner_liaison_requests"][0][
+            "project_owner_reference_task_id"
+        ] = "root-1"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertIn(
+            "OWNER_LIAISON_RESPONSE_PROJECT_OWNER_MISMATCH",
+            {finding["code"] for finding in result["findings"]},
+        )
+
     def test_v25_topology_validation_rejects_global_wait_with_safe_action(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
         topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
@@ -759,6 +974,54 @@ class PortfolioControlTests(unittest.TestCase):
         self.assertIn(
             "topology.heartbeat_project_sweep.project_results[0]: terminal stage requires goal_rolled_forward",
             errors,
+        )
+
+    def test_v25_goal_diagnosis_requires_autonomous_recovery(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        project_result = topology["heartbeat_project_sweep"]["project_results"][0]
+        project_result["goal_diagnosis_trigger"] = "completed_empty_output"
+        self.assertIn(
+            "topology.heartbeat_project_sweep.project_results[0]: a goal diagnosis trigger requires an autonomous recovery action",
+            CONTROL.validate_topology(topology),
+        )
+
+    def test_v25_goal_diagnosis_accepts_resume_or_independent_path(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        project_result = topology["heartbeat_project_sweep"]["project_results"][0]
+        project_result.update(
+            {
+                "goal_diagnosis_trigger": "thread_idle",
+                "goal_recovery_action": "RESUME_CURRENT_GOAL",
+            }
+        )
+        self.assertEqual(CONTROL.validate_topology(topology), [])
+        project_result.update(
+            {
+                "goal_diagnosis_trigger": "goal_stalled",
+                "goal_recovery_action": "AUTHORIZED_INDEPENDENT_PATH",
+            }
+        )
+        self.assertEqual(CONTROL.validate_topology(topology), [])
+
+    def test_v25_goal_diagnosis_cannot_abandon_project_as_complete(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        project_result = topology["heartbeat_project_sweep"]["project_results"][0]
+        project_result.update(
+            {
+                "classification": "COMPLETE_FROZEN",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "goal_diagnosis_trigger": "completed_empty_output",
+                "goal_recovery_action": "RESUME_CURRENT_GOAL",
+            }
+        )
+        self.assertIn(
+            "topology.heartbeat_project_sweep.project_results[0]: goal stall, idle, or completed-empty evidence cannot classify the project complete",
+            CONTROL.validate_topology(topology),
         )
 
     def test_v25_topology_audit_rejects_project_goal_drift(self):
@@ -870,6 +1133,7 @@ class PortfolioControlTests(unittest.TestCase):
             }
         )
         sweep["control_plane_escalation"] = {
+            "request_id": "owner-request-governance-alpha-1",
             "trigger": "GOVERNANCE_GOAL_CONFLICT",
             "affected_projects": ["alpha"],
             "root_cause": "the current control policy excludes every goal-satisfying route",
@@ -883,6 +1147,36 @@ class PortfolioControlTests(unittest.TestCase):
         }
         sweep["global_decision"] = "OWNER_ATTENTION"
         self.assertEqual(CONTROL.validate_topology(topology), [])
+
+    def test_v25_decision_required_escalation_requires_request_id(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        sweep = topology["heartbeat_project_sweep"]
+        result = sweep["project_results"][0]
+        result.update(
+            {
+                "classification": "NO_SAFE_ACTION",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "control_plane_issue": "GOVERNANCE_GOAL_CONFLICT",
+            }
+        )
+        sweep["control_plane_escalation"] = {
+            "request_id": "",
+            "trigger": "GOVERNANCE_GOAL_CONFLICT",
+            "affected_projects": ["alpha"],
+            "root_cause": "governance conflicts with the project goal",
+            "architecture_options": ["amend policy", "narrow goal"],
+            "recommended_option": "amend policy",
+            "user_decision_required": True,
+            "immediate_safe_actions": [],
+        }
+        sweep["global_decision"] = "OWNER_ATTENTION"
+        self.assertIn(
+            "topology.heartbeat_project_sweep.control_plane_escalation: request_id must be non-empty",
+            CONTROL.validate_topology(topology),
+        )
 
     def test_v25_waiting_automation_stays_active_for_next_complete_sweep(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
@@ -985,6 +1279,8 @@ class PortfolioControlTests(unittest.TestCase):
                 "goal_next_deliverable": beta["goal_contract"]["next_deliverable"],
                 "stage_terminal": False,
                 "goal_rolled_forward": False,
+                "goal_diagnosis_trigger": None,
+                "goal_recovery_action": None,
             }
         )
         sweep["source_evidence"]["manifest_sha256"] = CONTROL.sha256_text(

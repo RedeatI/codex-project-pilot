@@ -104,6 +104,7 @@ or production data in it.
             "GOVERNANCE_GOAL_CONFLICT"
           ],
           "notification_fields": [
+            "request_id",
             "affected_projects",
             "root_cause",
             "architecture_options",
@@ -115,6 +116,61 @@ or production data in it.
           "ordinary_single_project_failure_is_project_local": true,
           "major_project_architecture_remains_owner_gate": true
         }
+      },
+      "owner_liaison_routing": {
+        "schema": "OWNER_LIAISON_ROUTING_V1",
+        "liaison_task_id": "01a013cd-60f1-7f73-974e-3663f7297ad2",
+        "decision_categories": [
+          "authority_escalation",
+          "credential_or_private_data",
+          "external_publication_or_deployment",
+          "destructive_or_irreversible_external_write",
+          "cross_host_or_migration",
+          "major_architecture",
+          "desktop_login_or_account"
+        ],
+        "request_fields": [
+          "request_id",
+          "blocker",
+          "authority_or_evidence",
+          "minimal_options",
+          "recommendation",
+          "next"
+        ],
+        "delivery_readback_fields": [
+          "delivery_status",
+          "delivery_readback_id",
+          "delivery_turn_id",
+          "response_request_id",
+          "response_router",
+          "project_owner_reference_task_id"
+        ],
+        "request_creator_roles": [
+          "root_controller",
+          "scheduler",
+          "runtime_supervisor",
+          "project_owner"
+        ],
+        "deduplicate_by": "request_id",
+        "liaison_is_sole_user_decision_channel": true,
+        "requesters_create_or_reference_only": true,
+        "delivery_readback_required": true,
+        "delivery_turn_required": true,
+        "ordinary_project_recovery_must_not_escalate": true,
+        "ordinary_project_recovery_categories": [
+          "mechanical_recovery",
+          "path_recovery",
+          "harness_recovery",
+          "small_project_architecture"
+        ],
+        "canonical_id_field": "request_id",
+        "request_aliases_allowed": true,
+        "same_request_id_response_required": true,
+        "response_router_roles": [
+          "governance_response_router",
+          "runtime_response_router"
+        ],
+        "exact_project_owner_reference_only": true
       },
       "owner_gate_categories": [
         "credential_or_private_data",
@@ -173,7 +229,23 @@ or production data in it.
         ],
         "next_stage_trigger": "STAGE_TERMINAL",
         "roll_forward_required": true,
-        "ordinary_recovery_autonomous": true
+        "ordinary_recovery_autonomous": true,
+        "diagnosis_triggers": [
+          "goal_stalled",
+          "thread_idle",
+          "completed_empty_output"
+        ],
+        "diagnose_and_resume_required": true,
+        "turn_stop_idle_empty_never_project_completion": true,
+        "status_only_progress_forbidden": true,
+        "independent_recovery_categories": [
+          "feature",
+          "integration",
+          "test",
+          "documentation",
+          "performance",
+          "evidence"
+        ]
       },
       "repository": {
         "provider": "github",
@@ -258,6 +330,29 @@ or production data in it.
   stage and next deliverable before the next action is dispatched. A missing goal is
   a governance defect and cannot become silent global waiting; one project blocker
   cannot pause independent projects. V2.4 projects do not require this block.
+- `goal_stalled`, `thread_idle`, and `completed_empty_output` are diagnosis triggers,
+  never evidence of project completion or abandonment. The writer and heartbeat
+  diagnose the cause and either resume the original `final_goal`/current objective or
+  choose authorized feature, integration, test, documentation, performance, or
+  evidence work that does not depend on the blocker. A turn stop, idle task, or empty
+  completed output cannot clear the goal. Status-only activity is not progress. Only
+  a true owner-only, major-architecture, or high-risk boundary enters the unified
+  liaison route.
+- `OWNER_LIAISON_ROUTING_V1` is required by V2.5. Every true owner-only or
+  `DECISION_REQUIRED` case uses one canonical stable `request_id` and the sole
+  liaison task `01a013cd-60f1-7f73-974e-3663f7297ad2`. Root, scheduler, runtime
+  supervisor, and the exact project owner may create or reference the request, but
+  may not ask the user directly. Each request contains `request_id`, `blocker`,
+  `authority_or_evidence`, `minimal_options`, `recommendation`, and `next`.
+  Credentials/private data, authority expansion, publication/deployment,
+  destructive/irreversible work, cross-host migration, major architecture, and
+  desktop/login/account actions use this route. Mechanical, path, harness, and small
+  project-local architecture recovery must not use it.
+- The liaison deduplicates by canonical `request_id`, records its delivery readback
+  and delivery turn, and returns the user's response with the same `request_id` to
+  the governance or runtime response router. That router may reference the response
+  only to the exact manifest project owner. Legacy aliases may resolve to one
+  canonical ID, but aliases cannot collide or create a second decision request.
 - In federated mode, grant each owner only its project-local envelope, such as
   `project_local_decide`, `project_local_admission`, `project_execute`, and the
   exact repository/test/delivery authorities it needs. These never imply external

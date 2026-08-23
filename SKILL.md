@@ -164,6 +164,22 @@ host identity, or evidence boundaries.
    stays with the writer. A terminal stage updates the goal and rolls forward before
    the next dispatch. A missing goal is a governance conflict, not global waiting;
    one blocked goal never pauses safe siblings.
+   Treat `goal_stalled`, `thread_idle`, and `completed_empty_output` as diagnosis
+   triggers, never completion or permission to abandon the project. Diagnose and
+   resume the original final goal/current objective, or select authorized feature,
+   integration, test, documentation, performance, or evidence work independent of
+   the blocker. A turn stop, idle state, empty output, or status-only update is not
+   progress.
+   Under `OWNER_LIAISON_ROUTING_V1`, every genuine owner-only or
+   `DECISION_REQUIRED` action uses one stable canonical `request_id` and only liaison
+   task `01a013cd-60f1-7f73-974e-3663f7297ad2` communicates it to the user. Root,
+   scheduler, runtime supervisor, and the exact project owner may create or reference
+   the packet but never ask directly. Require blocker, authority/evidence, minimal
+   options, recommendation, next step, same-ID response routing, delivery readback,
+   and delivery turn. The liaison deduplicates canonical IDs and aliases; the
+   governance/runtime response router may return the decision only to the exact
+   project owner. Mechanical/path/harness/small project-architecture recovery stays
+   local and must not escalate.
    Treat multi-project start failure, heartbeat next-stage derivation or dispatch
    failure, a parallelism anomaly, long-idle tasks caused by control state, or a
    governance/user-goal conflict as a control-plane architecture escalation. Send a

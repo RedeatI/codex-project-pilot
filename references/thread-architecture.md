@@ -221,7 +221,9 @@ V2.5 topology snapshots also record the complete decision made during that wake:
         "goal_current_stage": "integration",
         "goal_next_deliverable": "integrated acceptance candidate",
         "stage_terminal": true,
-        "goal_rolled_forward": true
+        "goal_rolled_forward": true,
+        "goal_diagnosis_trigger": null,
+        "goal_recovery_action": null
       }
     ],
     "control_plane_escalation": null,
@@ -249,17 +251,59 @@ manifest goal and proving `goal_rolled_forward=true`; then dispatch against the 
 stage. A missing goal routes as `GOVERNANCE_GOAL_CONFLICT`, not global `WAITING`.
 An ordinary blocker in one goal does not affect runnable siblings.
 
+If a result observes `goal_stalled`, `thread_idle`, or `completed_empty_output`, set
+`goal_diagnosis_trigger` and pair it with `RESUME_CURRENT_GOAL` or
+`AUTHORIZED_INDEPENDENT_PATH`. Those events cannot produce `COMPLETE_FROZEN` and do
+not clear the persistent final goal/current objective. Status-only output is not
+progress.
+
 Set `control_plane_issue` only when the fault is architectural to portfolio control:
 start failure across projects, next-stage derivation or dispatch failure, parallelism
 anomaly, long-idle task topology, or a governance/user-goal conflict. A non-null
 issue requires a timely `control_plane_escalation` packet naming
-`affected_projects`, `root_cause`, at least two `architecture_options`, one
+canonical `request_id`, `affected_projects`, `root_cause`, at least two `architecture_options`, one
 `recommended_option`, `user_decision_required=true`, and
 `immediate_safe_actions`. If any other project is runnable, keep
 `global_decision=RUNNING` and list that continuation in the packet. When no safe
 action remains, use `OWNER_ATTENTION`, never silent `WAITING`. Do not raise this
 packet for one project's ordinary implementation failure; it stays with that owner
 unless it crosses the major-architecture owner gate.
+
+Every owner-only result and every non-null control escalation references one entry in
+`owner_liaison_requests`:
+
+```json
+{
+  "owner_liaison_requests": [
+    {
+      "request_id": "owner-request-service-a-8",
+      "request_aliases": ["legacy-service-a-decision"],
+      "category": "authority_escalation",
+      "requester_task_id": "service-a-owner",
+      "liaison_task_id": "01a013cd-60f1-7f73-974e-3663f7297ad2",
+      "blocker": "the next stage requires an ungranted authority",
+      "authority_or_evidence": "authority-readback-service-a-8",
+      "minimal_options": ["grant narrow authority", "defer this stage"],
+      "recommendation": "grant narrow authority",
+      "next": "fresh-admit after the decision readback",
+      "delivery_status": "DELIVERED",
+      "delivery_readback_id": "owner-delivery-service-a-8",
+      "delivery_turn_id": "owner-turn-service-a-8",
+      "response_request_id": "owner-request-service-a-8",
+      "response_router": "runtime_response_router",
+      "project_owner_reference_task_id": "service-a-owner"
+    }
+  ]
+}
+```
+
+Only the configured liaison sends the packet to the user. Root, scheduler, runtime
+supervisor, and exact manifest project owners create or reference a stable ID but do
+not ask directly. Canonical IDs and aliases are globally deduplicated. A delivered
+response returns under the same canonical ID to a governance/runtime response router
+and may reference only the exact manifest owner. Pending requests cannot claim a
+delivery turn or response. Mechanical/path/harness/small project-architecture work
+does not create a request.
 
 Use these phases:
 

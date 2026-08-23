@@ -122,6 +122,12 @@ conflicts, major architecture, authority escalation, credentials/private data,
 production release/deploy, migration, and destructive or irreversible external writes
 remain owner gates.
 
+`goal_stalled`, `thread_idle`, and `completed_empty_output` trigger diagnosis, not
+completion. Preserve the original final goal and current objective. The writer or
+heartbeat diagnoses the cause and resumes it, or selects authorized feature,
+integration, test, documentation, performance, or evidence work independent of the
+blocker. A stopped/idle/empty turn and a status-only readback never satisfy progress.
+
 When a stage becomes terminal, update `current_stage` and `next_deliverable`, retain
 the terminal acceptance evidence, set the goal roll-forward evidence, and immediately
 derive the next long contract. Do not reuse a terminal goal as a safe action. A
@@ -232,11 +238,17 @@ Set `authoritative` only from executor-owned runtime evidence. When
   materially different internal recovery round; do not emit half-step Root/user
   reports, empty heartbeats, unchanged queue reminders, or repeated readbacks.
 - If fresh evidence proves progress needs user judgment, a choice, login, desktop
-  action, host migration, or another owner-only action, send one timely packet
-  through the owner liaison. Name the exact blocker, why current authority cannot
-  resolve it, the smallest options, the recommendation, and the post-answer next
-  step. Do not silently wait. Do not escalate mechanical, path, harness, or
-  scheduling issues that the current tasks are authorized to resolve.
+  action, host migration, or another owner-only action, create one stable canonical
+  `request_id`. Only liaison task `01a013cd-60f1-7f73-974e-3663f7297ad2` sends the
+  timely packet to the user. Name the exact blocker, authority/evidence, smallest
+  options, recommendation, and post-answer next step. Root, scheduler, runtime
+  supervisor, and project owners may create or reference this ID but cannot ask the
+  user directly. The liaison deduplicates by canonical ID, records delivery readback
+  and delivery turn, and returns the user's response under the same ID to the
+  governance/runtime response router. That router may reference it only to the exact
+  project owner. Aliases resolve to one canonical request and cannot create a second
+  decision. Do not silently wait or escalate mechanical, path, harness, small
+  project-local architecture, or scheduling issues that current authority can solve.
 - Distinguish `waiting` from `blocked`. Waiting has a known external event or user
   action; blocked lacks authority or a viable next action.
 - A harness-only failure cannot invalidate already verified product bytes. Preserve

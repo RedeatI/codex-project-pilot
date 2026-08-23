@@ -179,6 +179,7 @@ CONTROL_PLANE_PROJECT_ISSUES = {
     "GOVERNANCE_GOAL_CONFLICT",
 }
 CONTROL_PLANE_ESCALATION_PACKET_FIELDS = {
+    "request_id",
     "affected_projects",
     "root_cause",
     "architecture_options",
@@ -197,6 +198,11 @@ PROJECT_GOAL_CONTRACT_FIELDS = (
     "next_stage_trigger",
     "roll_forward_required",
     "ordinary_recovery_autonomous",
+    "diagnosis_triggers",
+    "diagnose_and_resume_required",
+    "turn_stop_idle_empty_never_project_completion",
+    "status_only_progress_forbidden",
+    "independent_recovery_categories",
 )
 PROJECT_GOAL_AUTONOMOUS_SCOPE_REQUIRED = {
     "implementation",
@@ -224,6 +230,53 @@ PROJECT_GOAL_OWNER_ONLY_EXCEPTIONS_REQUIRED = {
     "destructive_or_irreversible_external_write",
 }
 PROJECT_GOAL_NEXT_STAGE_TRIGGER = "STAGE_TERMINAL"
+PROJECT_GOAL_DIAGNOSIS_TRIGGERS = {
+    "goal_stalled",
+    "thread_idle",
+    "completed_empty_output",
+}
+PROJECT_GOAL_RECOVERY_ACTIONS = {
+    "RESUME_CURRENT_GOAL",
+    "AUTHORIZED_INDEPENDENT_PATH",
+}
+OWNER_LIAISON_ROUTING_SCHEMA = "OWNER_LIAISON_ROUTING_V1"
+OWNER_LIAISON_TASK_ID = "01a013cd-60f1-7f73-974e-3663f7297ad2"
+OWNER_LIAISON_DECISION_CATEGORIES = {
+    "authority_escalation",
+    "credential_or_private_data",
+    "external_publication_or_deployment",
+    "destructive_or_irreversible_external_write",
+    "cross_host_or_migration",
+    "major_architecture",
+    "desktop_login_or_account",
+}
+OWNER_LIAISON_REQUEST_FIELDS = {
+    "request_id",
+    "blocker",
+    "authority_or_evidence",
+    "minimal_options",
+    "recommendation",
+    "next",
+}
+OWNER_LIAISON_DELIVERY_READBACK_FIELDS = {
+    "delivery_status",
+    "delivery_readback_id",
+    "delivery_turn_id",
+    "response_request_id",
+    "response_router",
+    "project_owner_reference_task_id",
+}
+OWNER_LIAISON_ORDINARY_PROJECT_RECOVERY_CATEGORIES = {
+    "mechanical_recovery",
+    "path_recovery",
+    "harness_recovery",
+    "small_project_architecture",
+}
+OWNER_LIAISON_REQUEST_STATUSES = {"PENDING", "DELIVERED"}
+OWNER_LIAISON_RESPONSE_ROUTERS = {
+    "governance_response_router",
+    "runtime_response_router",
+}
 FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES = {
     "control_read",
     "manifest_read",
@@ -591,6 +644,116 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
                     errors.append(
                         f"{escalation_context}: notification_fields must list the exact V2_5 owner-liaison packet"
                     )
+    owner_routing = value.get("owner_liaison_routing")
+    if contract_version == PROJECT_TASK_CONTRACT_V2_5 and owner_routing is None:
+        errors.append(
+            f"{context}: {PROJECT_TASK_CONTRACT_V2_5} requires owner_liaison_routing"
+        )
+    if owner_routing is not None:
+        routing_context = f"{context}.owner_liaison_routing"
+        if not isinstance(owner_routing, dict):
+            errors.append(f"{routing_context}: must be an object")
+        else:
+            routing_fields = [
+                "schema",
+                "liaison_task_id",
+                "decision_categories",
+                "request_fields",
+                "delivery_readback_fields",
+                "request_creator_roles",
+                "deduplicate_by",
+                "liaison_is_sole_user_decision_channel",
+                "requesters_create_or_reference_only",
+                "delivery_readback_required",
+                "delivery_turn_required",
+                "ordinary_project_recovery_must_not_escalate",
+                "ordinary_project_recovery_categories",
+                "canonical_id_field",
+                "request_aliases_allowed",
+                "same_request_id_response_required",
+                "response_router_roles",
+                "exact_project_owner_reference_only",
+            ]
+            errors.extend(require_fields(owner_routing, routing_fields, routing_context))
+            if owner_routing.get("schema") != OWNER_LIAISON_ROUTING_SCHEMA:
+                errors.append(
+                    f"{routing_context}: schema must be {OWNER_LIAISON_ROUTING_SCHEMA}"
+                )
+            if owner_routing.get("liaison_task_id") != OWNER_LIAISON_TASK_ID:
+                errors.append(
+                    f"{routing_context}: liaison_task_id must be {OWNER_LIAISON_TASK_ID}"
+                )
+            for field, exact_values, label in (
+                (
+                    "decision_categories",
+                    OWNER_LIAISON_DECISION_CATEGORIES,
+                    "decision categories",
+                ),
+                ("request_fields", OWNER_LIAISON_REQUEST_FIELDS, "request fields"),
+                (
+                    "delivery_readback_fields",
+                    OWNER_LIAISON_DELIVERY_READBACK_FIELDS,
+                    "delivery readback fields",
+                ),
+                (
+                    "ordinary_project_recovery_categories",
+                    OWNER_LIAISON_ORDINARY_PROJECT_RECOVERY_CATEGORIES,
+                    "ordinary project recovery categories",
+                ),
+            ):
+                observed = owner_routing.get(field)
+                if (
+                    not is_string_list(observed)
+                    or len(observed) != len(set(observed or []))
+                    or set(observed) != exact_values
+                ):
+                    errors.append(
+                        f"{routing_context}: {field} must list the exact {label}"
+                    )
+            request_creator_roles = owner_routing.get("request_creator_roles")
+            if (
+                not is_string_list(request_creator_roles)
+                or len(request_creator_roles)
+                != len(set(request_creator_roles or []))
+                or set(request_creator_roles)
+                != {
+                    "root_controller",
+                    "scheduler",
+                    "runtime_supervisor",
+                    "project_owner",
+                }
+            ):
+                errors.append(
+                    f"{routing_context}: request_creator_roles must list the exact control and project requesters"
+                )
+            if owner_routing.get("deduplicate_by") != "request_id":
+                errors.append(f"{routing_context}: deduplicate_by must be request_id")
+            if owner_routing.get("canonical_id_field") != "request_id":
+                errors.append(
+                    f"{routing_context}: canonical_id_field must be request_id"
+                )
+            response_router_roles = owner_routing.get("response_router_roles")
+            if (
+                not is_string_list(response_router_roles)
+                or len(response_router_roles)
+                != len(set(response_router_roles or []))
+                or set(response_router_roles) != OWNER_LIAISON_RESPONSE_ROUTERS
+            ):
+                errors.append(
+                    f"{routing_context}: response_router_roles must list the exact governance/runtime response routers"
+                )
+            for field in (
+                "liaison_is_sole_user_decision_channel",
+                "requesters_create_or_reference_only",
+                "delivery_readback_required",
+                "delivery_turn_required",
+                "ordinary_project_recovery_must_not_escalate",
+                "request_aliases_allowed",
+                "same_request_id_response_required",
+                "exact_project_owner_reference_only",
+            ):
+                if owner_routing.get(field) is not True:
+                    errors.append(f"{routing_context}: {field} must be true")
     return errors
 
 
@@ -653,6 +816,33 @@ def validate_project_goal_contract(value: Any, context: str) -> list[str]:
         errors.append(f"{context}: roll_forward_required must be true")
     if value["ordinary_recovery_autonomous"] is not True:
         errors.append(f"{context}: ordinary_recovery_autonomous must be true")
+    diagnosis_triggers = value["diagnosis_triggers"]
+    if (
+        not is_string_list(diagnosis_triggers)
+        or len(diagnosis_triggers) != len(set(diagnosis_triggers or []))
+        or set(diagnosis_triggers) != PROJECT_GOAL_DIAGNOSIS_TRIGGERS
+    ):
+        errors.append(
+            f"{context}: diagnosis_triggers must list the exact goal-stall, idle, and completed-empty triggers"
+        )
+    for field in (
+        "diagnose_and_resume_required",
+        "turn_stop_idle_empty_never_project_completion",
+        "status_only_progress_forbidden",
+    ):
+        if value[field] is not True:
+            errors.append(f"{context}: {field} must be true")
+    independent_recovery_categories = value["independent_recovery_categories"]
+    if (
+        not is_string_list(independent_recovery_categories)
+        or len(independent_recovery_categories)
+        != len(set(independent_recovery_categories or []))
+        or set(independent_recovery_categories)
+        != CONTINUOUS_PROGRESS_INDEPENDENT_WORK_CATEGORIES
+    ):
+        errors.append(
+            f"{context}: independent_recovery_categories must list the exact authorized independent paths"
+        )
     return errors
 
 
@@ -902,6 +1092,8 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
             "goal_next_deliverable",
             "stage_terminal",
             "goal_rolled_forward",
+            "goal_diagnosis_trigger",
+            "goal_recovery_action",
         ]
         for index, result in enumerate(project_results):
             result_context = f"{context}.project_results[{index}]"
@@ -980,6 +1172,33 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
                 errors.append(
                     f"{result_context}: non-terminal stage cannot claim goal_rolled_forward"
                 )
+            goal_diagnosis_trigger = result["goal_diagnosis_trigger"]
+            goal_recovery_action = result["goal_recovery_action"]
+            if goal_diagnosis_trigger is not None and not is_enum_value(
+                goal_diagnosis_trigger, PROJECT_GOAL_DIAGNOSIS_TRIGGERS
+            ):
+                errors.append(
+                    f"{result_context}: goal_diagnosis_trigger is invalid"
+                )
+            if goal_recovery_action is not None and not is_enum_value(
+                goal_recovery_action, PROJECT_GOAL_RECOVERY_ACTIONS
+            ):
+                errors.append(f"{result_context}: goal_recovery_action is invalid")
+            if goal_diagnosis_trigger is not None and goal_recovery_action is None:
+                errors.append(
+                    f"{result_context}: a goal diagnosis trigger requires an autonomous recovery action"
+                )
+            if goal_diagnosis_trigger is None and goal_recovery_action is not None:
+                errors.append(
+                    f"{result_context}: goal_recovery_action requires a diagnosis trigger"
+                )
+            if (
+                goal_diagnosis_trigger is not None
+                and classification == "COMPLETE_FROZEN"
+            ):
+                errors.append(
+                    f"{result_context}: goal stall, idle, or completed-empty evidence cannot classify the project complete"
+                )
             if classification == "DISPATCHED":
                 safe_action_count += 1
                 for field in ("action_id", "admission_id", "dispatched_task_id"):
@@ -1037,6 +1256,8 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
         escalation_context = f"{context}.control_plane_escalation"
         packet_fields = ["trigger", *sorted(CONTROL_PLANE_ESCALATION_PACKET_FIELDS)]
         errors.extend(require_fields(escalation, packet_fields, escalation_context))
+        if not is_non_empty_string(escalation.get("request_id")):
+            errors.append(f"{escalation_context}: request_id must be non-empty")
         if not is_enum_value(
             escalation.get("trigger"), CONTROL_PLANE_ESCALATION_TRIGGERS
         ):
@@ -1120,6 +1341,134 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
     return errors
 
 
+def validate_owner_liaison_requests(value: Any) -> list[str]:
+    context = "topology.owner_liaison_requests"
+    if not isinstance(value, list):
+        return [f"{context}: must be an array"]
+    errors: list[str] = []
+    seen_request_ids: set[str] = set()
+    seen_request_identifiers: set[str] = set()
+    required = [
+        "request_id",
+        "request_aliases",
+        "category",
+        "requester_task_id",
+        "liaison_task_id",
+        "blocker",
+        "authority_or_evidence",
+        "minimal_options",
+        "recommendation",
+        "next",
+        "delivery_status",
+        "delivery_readback_id",
+        "delivery_turn_id",
+        "response_request_id",
+        "response_router",
+        "project_owner_reference_task_id",
+    ]
+    for index, request in enumerate(value):
+        request_context = f"{context}[{index}]"
+        if not isinstance(request, dict):
+            errors.append(f"{request_context}: must be an object")
+            continue
+        errors.extend(require_fields(request, required, request_context))
+        if any(field not in request for field in required):
+            continue
+        request_id = request["request_id"]
+        if not is_non_empty_string(request_id):
+            errors.append(f"{request_context}: request_id must be non-empty")
+        elif request_id in seen_request_ids:
+            errors.append(f"{request_context}: duplicate request_id {request_id}")
+        else:
+            seen_request_ids.add(request_id)
+            if request_id in seen_request_identifiers:
+                errors.append(
+                    f"{request_context}: request_id collides with another canonical ID or alias"
+                )
+            seen_request_identifiers.add(request_id)
+        request_aliases = request["request_aliases"]
+        if (
+            not is_string_list(request_aliases)
+            or len(request_aliases) != len(set(request_aliases or []))
+            or (
+                isinstance(request_id, str)
+                and request_id in set(request_aliases or [])
+            )
+        ):
+            errors.append(
+                f"{request_context}: request_aliases must be unique strings distinct from request_id"
+            )
+        else:
+            for alias in request_aliases:
+                if alias in seen_request_identifiers:
+                    errors.append(
+                        f"{request_context}: request alias collides with another canonical ID or alias: {alias}"
+                    )
+                seen_request_identifiers.add(alias)
+        if not is_enum_value(request["category"], OWNER_LIAISON_DECISION_CATEGORIES):
+            errors.append(f"{request_context}: category is not owner-only")
+        if not is_non_empty_string(request["requester_task_id"]):
+            errors.append(f"{request_context}: requester_task_id must be non-empty")
+        if request["liaison_task_id"] != OWNER_LIAISON_TASK_ID:
+            errors.append(
+                f"{request_context}: liaison_task_id must be {OWNER_LIAISON_TASK_ID}"
+            )
+        for field in (
+            "blocker",
+            "authority_or_evidence",
+            "recommendation",
+            "next",
+        ):
+            if not is_non_empty_string(request[field]):
+                errors.append(f"{request_context}: {field} must be non-empty")
+        minimal_options = request["minimal_options"]
+        if (
+            not is_string_list(minimal_options)
+            or not minimal_options
+            or len(minimal_options) != len(set(minimal_options or []))
+        ):
+            errors.append(
+                f"{request_context}: minimal_options must be a non-empty unique string array"
+            )
+        delivery_status = request["delivery_status"]
+        if not is_enum_value(delivery_status, OWNER_LIAISON_REQUEST_STATUSES):
+            errors.append(f"{request_context}: delivery_status is invalid")
+        for field in (
+            "delivery_readback_id",
+            "delivery_turn_id",
+            "response_request_id",
+            "response_router",
+            "project_owner_reference_task_id",
+        ):
+            field_value = request[field]
+            if field_value is not None and not is_non_empty_string(field_value):
+                errors.append(
+                    f"{request_context}: {field} must be null or a non-empty string"
+                )
+        if delivery_status == "DELIVERED" and (
+            not is_non_empty_string(request["delivery_readback_id"])
+            or not is_non_empty_string(request["delivery_turn_id"])
+            or request["response_request_id"] != request_id
+            or not is_enum_value(
+                request["response_router"], OWNER_LIAISON_RESPONSE_ROUTERS
+            )
+        ):
+            errors.append(
+                f"{request_context}: DELIVERED requires readback/turn IDs and a same-request-id governance/runtime response route"
+            )
+        if delivery_status == "PENDING" and (
+            request["delivery_readback_id"] is not None
+            or request["delivery_turn_id"] is not None
+            or request["response_request_id"] is not None
+            or request["response_router"] is not None
+            or request["project_owner_reference_task_id"] is not None
+        ):
+            errors.append(
+                f"{request_context}: PENDING cannot claim response routing or delivery readback"
+            )
+    return errors
+
+
 def validate_topology(topology: dict[str, Any]) -> list[str]:
     errors = require_fields(
         topology,
@@ -1147,6 +1496,8 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         errors.extend(
             validate_heartbeat_project_sweep(topology["heartbeat_project_sweep"])
         )
+    if "owner_liaison_requests" in topology:
+        errors.extend(validate_owner_liaison_requests(topology["owner_liaison_requests"]))
 
     policy = topology["policy"]
     role_names: set[str] = set()
@@ -1965,6 +2316,123 @@ def audit_topology(
                             expected_owner_task_id=project["owner_task_id"],
                             dispatched_task_id=dispatched_task_id,
                         )
+    if contract_version == PROJECT_TASK_CONTRACT_V2_5:
+        owner_routing = project_owner_autonomy["owner_liaison_routing"]
+        configured_liaison_task_id = owner_routing["liaison_task_id"]
+        if governance_mode == "federated_thin_kernel":
+            liaison_task = tasks.get(configured_liaison_task_id)
+            if liaison_task is None:
+                finding(
+                    "OWNER_LIAISON_TASK_MISSING",
+                    "V2.5 owner-only decisions require the configured liaison task",
+                    liaison_task_id=configured_liaison_task_id,
+                )
+            elif (
+                liaison_task["role"] != "owner_liaison"
+                or liaison_task["project_id"] is not None
+                or liaison_task["provisional"]
+                or liaison_task["state"] in {"retired", "unavailable", "handoff_only"}
+            ):
+                finding(
+                    "OWNER_LIAISON_TASK_INVALID",
+                    "the configured owner liaison must be one live non-project liaison task",
+                    liaison_task_id=configured_liaison_task_id,
+                    observed_role=liaison_task["role"],
+                    observed_state=liaison_task["state"],
+                    provisional=liaison_task["provisional"],
+                )
+        owner_requests = topology.get("owner_liaison_requests", [])
+        owner_requests_by_id = {
+            request["request_id"]: request for request in owner_requests
+        }
+        owner_requests_by_identifier = dict(owner_requests_by_id)
+        for request in owner_requests:
+            for alias in request["request_aliases"]:
+                owner_requests_by_identifier[alias] = request
+        for request_id, request in owner_requests_by_id.items():
+            requester_task_id = request["requester_task_id"]
+            requester = tasks.get(requester_task_id)
+            if requester is None:
+                finding(
+                    "OWNER_LIAISON_REQUESTER_MISSING",
+                    "an owner request must name an authoritative requester task",
+                    request_id=request_id,
+                    requester_task_id=requester_task_id,
+                )
+                continue
+            requester_is_control = requester["role"] in {
+                "root_controller",
+                "scheduler",
+                "runtime_supervisor",
+            }
+            requester_project_id = requester["project_id"]
+            requester_is_project_owner = (
+                requester_project_id in projects
+                and projects[requester_project_id]["owner_task_id"]
+                == requester_task_id
+            )
+            if not (requester_is_control or requester_is_project_owner):
+                finding(
+                    "OWNER_LIAISON_REQUESTER_NOT_AUTHORIZED",
+                    "only Root, scheduler, runtime supervisor, or the manifest project owner may create a request ID",
+                    request_id=request_id,
+                    requester_task_id=requester_task_id,
+                    requester_role=requester["role"],
+                    requester_project_id=requester_project_id,
+                )
+            project_owner_reference_task_id = request[
+                "project_owner_reference_task_id"
+            ]
+            if project_owner_reference_task_id is not None:
+                reference_matches_owner = any(
+                    project["owner_task_id"] == project_owner_reference_task_id
+                    for project in projects.values()
+                )
+                if not reference_matches_owner:
+                    finding(
+                        "OWNER_LIAISON_RESPONSE_PROJECT_OWNER_MISMATCH",
+                        "a delivered response may reference only an exact manifest project owner",
+                        request_id=request_id,
+                        project_owner_reference_task_id=project_owner_reference_task_id,
+                    )
+        lifecycle_readback = topology.get("control_lifecycle")
+        pending_owner_request_id = (
+            lifecycle_readback.get("pending_owner_request_id")
+            if isinstance(lifecycle_readback, dict)
+            else None
+        )
+        if (
+            pending_owner_request_id is not None
+            and pending_owner_request_id not in owner_requests_by_identifier
+        ):
+            finding(
+                "OWNER_LIAISON_PENDING_REQUEST_MISSING",
+                "control lifecycle pending_owner_request_id must reference the unified request ledger",
+                request_id=pending_owner_request_id,
+            )
+        if isinstance(heartbeat_sweep, dict):
+            escalation = heartbeat_sweep["control_plane_escalation"]
+            if (
+                isinstance(escalation, dict)
+                and escalation["request_id"] not in owner_requests_by_identifier
+            ):
+                finding(
+                    "OWNER_LIAISON_ESCALATION_REQUEST_MISSING",
+                    "a DECISION_REQUIRED control escalation must reference a unified owner request",
+                    request_id=escalation["request_id"],
+                )
+            for result in heartbeat_sweep["project_results"]:
+                if (
+                    result["classification"] == "OWNER_BLOCKED"
+                    and result["owner_blocker_id"]
+                    not in owner_requests_by_identifier
+                ):
+                    finding(
+                        "OWNER_LIAISON_PROJECT_REQUEST_MISSING",
+                        "OWNER_BLOCKED must reference a unified owner request ID",
+                        project_id=result["project_id"],
+                        request_id=result["owner_blocker_id"],
+                    )
     for requirement, enabled in policy["dispatch_requirements"].items():
         if not enabled:
             finding(

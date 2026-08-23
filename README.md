@@ -98,6 +98,20 @@ must roll the contract forward before dispatching the next stage. Missing goal s
 is surfaced as a governance conflict, and one blocked project cannot turn the whole
 portfolio into waiting.
 
+Goal stall, task idle, and completed turns with empty output are diagnosis triggers,
+not project completion. The writer or heartbeat resumes the original goal or selects
+authorized independent feature, integration, test, documentation, performance, or
+evidence work; status-only activity is never progress.
+
+`OWNER_LIAISON_ROUTING_V1` gives every genuine decision-required action one stable
+canonical `request_id` and one outbound channel: liaison task
+`01a013cd-60f1-7f73-974e-3663f7297ad2`. Root, scheduler, runtime supervisor, and
+project owners create or reference the request but do not ask the user directly. The
+liaison deduplicates, records delivery readback and turn, and returns the decision
+under the same ID to a governance/runtime response router, which may reference it
+only to the exact project owner. Ordinary mechanical, path, harness, and small
+project-local architecture recovery never enters this route.
+
 Delivery-first staging prioritizes core implementation, integration, and acceptance
 candidates. Non-blocking deep security research may be deferred into one explicit
 pre-release gate, while known critical/high findings, authentication and permission

@@ -46,6 +46,9 @@ OWNER_ONLY_EXCEPTIONS=<cross-project/major-architecture/authority/credential/pro
 NEXT_STAGE_TRIGGER=STAGE_TERMINAL
 ROLL_FORWARD_REQUIRED=TRUE
 ORDINARY_RECOVERY_AUTONOMOUS=TRUE
+GOAL_DIAGNOSIS_TRIGGER=NONE|goal_stalled|thread_idle|completed_empty_output
+GOAL_RECOVERY_ACTION=NONE|RESUME_CURRENT_GOAL|AUTHORIZED_INDEPENDENT_PATH
+OWNER_REQUEST_ID=<canonical stable request id or NONE>
 
 ROLE_BOUNDARY
 - In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
@@ -132,6 +135,11 @@ PROJECT_GOAL_CONTRACT_BOUNDARY
   deliverable, prove goal roll-forward, and immediately derive the next long contract.
   A missing goal is a governance conflict, not permission for global waiting. A
   blocked project does not pause any independent project.
+- `goal_stalled`, `thread_idle`, and `completed_empty_output` are diagnosis triggers,
+  not completion. Diagnose and resume the original final goal/current objective, or
+  choose authorized feature, integration, test, documentation, performance, or
+  evidence work independent of the blocker. Never count status-only output as
+  progress or abandon the project after one stopped, idle, or empty turn.
 
 ACTION_SELECTION
 - When task, host, root, writer, inputs, and authority are complete, choose one
@@ -181,11 +189,17 @@ THREAD_RECOVERY_BOUNDARY
 
 OWNER_ACTION_ROUTING
 - If progress truly requires user judgment, a selection, login, desktop action, host
-  migration, or another owner-only action, send one timely minimal packet through
-  the owner liaison: exact blocker, why current authority cannot solve it, smallest
-  options, recommendation, and next step. Do not silently wait.
-- Resolve authorized mechanical, path, harness, and scheduling problems internally;
-  do not send low-value messages or repeat an already delivered owner request.
+  migration, or another owner-only action, create one canonical `OWNER_REQUEST_ID`.
+  Only liaison task `01a013cd-60f1-7f73-974e-3663f7297ad2` sends the timely packet to
+  the user: request ID, blocker, authority/evidence, minimal options, recommendation,
+  and next step. Root, scheduler, runtime supervisor, and project owners may create
+  or reference the ID but cannot ask the user directly.
+- The liaison deduplicates canonical IDs and aliases, records delivery readback and
+  turn, and returns the response under the same ID to the governance/runtime response
+  router. That router may reference it only to the exact manifest project owner.
+- Resolve authorized mechanical, path, harness, small project-local architecture,
+  and scheduling problems internally; do not send low-value messages or repeat an
+  already delivered owner request.
 
 INTERNAL_RECOVERY_AND_REPORTING
 - This task may coordinate bounded non-writing helpers for diagnosis or evidence
