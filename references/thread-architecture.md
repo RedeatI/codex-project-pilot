@@ -211,8 +211,17 @@ V2.5 topology snapshots also record the complete decision made during that wake:
         "dispatched_task_id": "service-a-owner",
         "owner_blocker_id": null,
         "reason": "fresh evidence identified an authorized next stage",
-        "evidence_ids": ["task-readback-service-a-42", "dispatch-service-a-stage-8"],
-        "control_plane_issue": null
+        "evidence_ids": [
+          "task-readback-service-a-42",
+          "goal-contract-service-a-42",
+          "dispatch-service-a-stage-8"
+        ],
+        "control_plane_issue": null,
+        "goal_contract_evidence_id": "goal-contract-service-a-42",
+        "goal_current_stage": "integration",
+        "goal_next_deliverable": "integrated acceptance candidate",
+        "stage_terminal": true,
+        "goal_rolled_forward": true
       }
     ],
     "control_plane_escalation": null,
@@ -231,6 +240,14 @@ fresh evidence excludes every authorized independent route, and `COMPLETE_FROZEN
 only for a manifest project already complete or intentionally frozen. Any safe
 classification forces `global_decision=RUNNING`; a blocked project cannot turn the
 global decision into `WAITING` while another project can run.
+
+Each result also proves which project goal it read. `goal_current_stage` and
+`goal_next_deliverable` must match the audited manifest, and the named
+`goal_contract_evidence_id` must be present in `evidence_ids`. If the previous stage
+became terminal during this wake, set `stage_terminal=true` only after updating the
+manifest goal and proving `goal_rolled_forward=true`; then dispatch against the new
+stage. A missing goal routes as `GOVERNANCE_GOAL_CONFLICT`, not global `WAITING`.
+An ordinary blocker in one goal does not affect runnable siblings.
 
 Set `control_plane_issue` only when the fault is architectural to portfolio control:
 start failure across projects, next-stage derivation or dispatch failure, parallelism

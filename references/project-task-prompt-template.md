@@ -36,6 +36,16 @@ CONTINUOUS_PROGRESS=AUTHORIZED|NOT_REQUIRED
 INDEPENDENT_WHILE_BLOCKED=<feature|integration|test|documentation|performance|evidence|NONE>
 NEXT_STAGE_SEED=<next authorized state-changing stage or evidence needed to derive it>
 HEARTBEAT_HANDOFF=<terminal evidence IDs; blocker class; independent safe routes; next recompute trigger>
+FINAL_GOAL=<project goal from live manifest>
+CURRENT_STAGE=<current goal stage>
+NEXT_DELIVERABLE=<smallest stage-complete deliverable>
+ACCEPTANCE_EVIDENCE=<required evidence IDs/types>
+AUTONOMOUS_DECISION_SCOPE=<implementation/test/build/mechanical/path/harness/small-project-architecture/local-git-closeout boundaries>
+STOP_CONDITIONS=<first-nonzero/scope-writer/owner-gate/acceptance boundaries>
+OWNER_ONLY_EXCEPTIONS=<cross-project/major-architecture/authority/credential/production/migration/destructive gates>
+NEXT_STAGE_TRIGGER=STAGE_TERMINAL
+ROLL_FORWARD_REQUIRED=TRUE
+ORDINARY_RECOVERY_AUTONOMOUS=TRUE
 
 ROLE_BOUNDARY
 - In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
@@ -108,6 +118,20 @@ CONTROL_PLANE_ESCALATION_BOUNDARY
 - An ordinary single-project implementation, test, build, path, or harness failure is
   not a control-plane escalation; resolve it with a materially different project-local
   round. Major project architecture still uses the existing owner gate.
+
+PROJECT_GOAL_CONTRACT_BOUNDARY
+- Read the live manifest goal before action selection. `FINAL_GOAL`, `CURRENT_STAGE`,
+  `NEXT_DELIVERABLE`, and `ACCEPTANCE_EVIDENCE` define the outcome; do not substitute
+  a completed command, turn, or local artifact for the final goal.
+- The writer autonomously handles ordinary implementation, test, build, mechanical,
+  path, harness, small project-local architecture, and local Git closeout inside the
+  declared scope. Cross-project conflict, major architecture, authority escalation,
+  credentials/private data, production release/deploy, cross-host migration, and
+  destructive or irreversible external writes remain owner-only.
+- On `STAGE_TERMINAL`, retain the stage evidence, update the current stage and next
+  deliverable, prove goal roll-forward, and immediately derive the next long contract.
+  A missing goal is a governance conflict, not permission for global waiting. A
+  blocked project does not pause any independent project.
 
 ACTION_SELECTION
 - When task, host, root, writer, inputs, and authority are complete, choose one
@@ -207,6 +231,7 @@ RELEASED=TRUE|FALSE|UNPROVED
 NEXT=<one smallest action, bounded wait condition, owner decision, or NONE>
 NEXT_STAGE_SEED=<next authorized stage or evidence needed to derive it>
 HEARTBEAT_HANDOFF=<terminal evidence IDs; blocker class; independent safe routes; recompute trigger>
+GOAL_ROLL_FORWARD=<updated current stage; next deliverable; evidence id or NOT_TERMINAL>
 OWNER_ACTION_REQUIRED=<minimal exact action or NONE>
 MIGRATION_READBACK=<old/new ids, fence, handoff, archive, writer transfer or NONE>
 

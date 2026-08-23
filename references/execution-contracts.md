@@ -113,6 +113,22 @@ blocker is the last remaining route. Status-only sweeps, duplicate admissions,
 filler, repeated no-value actions, second writers, and capacity/host/root/authority/
 first-nonzero/credential/release/migration bypasses remain forbidden.
 
+Every V2.5 project sweep begins with its `PROJECT_GOAL_CONTRACT`. Read `final_goal`,
+`current_stage`, `next_deliverable`, `acceptance_evidence`, autonomous decision
+scope, stop conditions, owner-only exceptions, and next-stage trigger before deriving
+work. Ordinary implementation, test, build, mechanical/path/harness recovery, small
+project-local architecture, and local Git closeout remain autonomous. Cross-project
+conflicts, major architecture, authority escalation, credentials/private data,
+production release/deploy, migration, and destructive or irreversible external writes
+remain owner gates.
+
+When a stage becomes terminal, update `current_stage` and `next_deliverable`, retain
+the terminal acceptance evidence, set the goal roll-forward evidence, and immediately
+derive the next long contract. Do not reuse a terminal goal as a safe action. A
+missing goal is a control-governance conflict and cannot justify silent global
+waiting. A blocked project remains classified and evidenced while every independent
+goal continues.
+
 Control-plane architecture failures are not ordinary project blockers. If multiple
 projects cannot start, the heartbeat cannot derive or dispatch a next stage, observed
 parallelism is anomalous, tasks remain long-idle due to control state, or governance

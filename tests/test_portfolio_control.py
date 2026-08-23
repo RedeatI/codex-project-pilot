@@ -126,6 +126,10 @@ def enable_v25_proactive_project_sweep(manifest):
         "recompute_after_terminal": True,
         "blocked_project_does_not_pause_portfolio": True,
         "global_wait_only_when_no_safe_action": True,
+        "project_goal_contract_required": True,
+        "stage_terminal_roll_forward_required": True,
+        "missing_goal_cannot_force_global_waiting": True,
+        "single_project_blocker_cannot_force_global_waiting": True,
         "classifications": [
             "DISPATCHED",
             "ALREADY_ACTIVE",
@@ -169,6 +173,41 @@ def enable_v25_proactive_project_sweep(manifest):
             "major_project_architecture_remains_owner_gate": True,
         },
     }
+    for project in manifest["projects"]:
+        project["goal_contract"] = {
+            "final_goal": "Deliver the project's evidenced authorized outcome.",
+            "current_stage": "implementation",
+            "next_deliverable": "verified implementation candidate",
+            "acceptance_evidence": ["focused-tests", "final-readback"],
+            "autonomous_decision_scope": [
+                "implementation",
+                "test",
+                "build",
+                "mechanical_recovery",
+                "path_recovery",
+                "harness_recovery",
+                "small_project_architecture",
+                "local_git_closeout",
+            ],
+            "stop_conditions": [
+                "first_formal_or_native_nonzero",
+                "scope_or_writer_conflict",
+                "owner_only_exception",
+                "acceptance_complete",
+            ],
+            "owner_only_exceptions": [
+                "cross_project_conflict",
+                "major_architecture",
+                "authority_escalation",
+                "credential_or_private_data",
+                "production_release_or_deployment",
+                "cross_host_migration",
+                "destructive_or_irreversible_external_write",
+            ],
+            "next_stage_trigger": "STAGE_TERMINAL",
+            "roll_forward_required": True,
+            "ordinary_recovery_autonomous": True,
+        }
     return manifest
 
 
@@ -191,8 +230,20 @@ def add_v25_heartbeat_project_sweep(manifest, topology):
                 "dispatched_task_id": "alpha-owner",
                 "owner_blocker_id": None,
                 "reason": "authoritative task readback proves the admitted stage is active",
-                "evidence_ids": ["task-readback-alpha-1"],
+                "evidence_ids": [
+                    "task-readback-alpha-1",
+                    "goal-contract-alpha-1",
+                ],
                 "control_plane_issue": None,
+                "goal_contract_evidence_id": "goal-contract-alpha-1",
+                "goal_current_stage": manifest["projects"][0]["goal_contract"][
+                    "current_stage"
+                ],
+                "goal_next_deliverable": manifest["projects"][0]["goal_contract"][
+                    "next_deliverable"
+                ],
+                "stage_terminal": False,
+                "goal_rolled_forward": False,
             }
         ],
         "control_plane_escalation": None,
@@ -421,6 +472,38 @@ class PortfolioControlTests(unittest.TestCase):
     def test_manifest_validation_accepts_v25_proactive_project_sweep(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
         self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_v25_requires_project_goal_contract(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        del manifest["projects"][0]["goal_contract"]
+        self.assertIn(
+            "projects[0]: PROJECT_TASK_CONTRACT_V2_5 requires goal_contract",
+            CONTROL.validate_manifest(manifest),
+        )
+
+    def test_manifest_v25_requires_goal_roll_forward_and_autonomous_recovery(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        goal = manifest["projects"][0]["goal_contract"]
+        goal["roll_forward_required"] = False
+        goal["ordinary_recovery_autonomous"] = False
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "projects[0].goal_contract: roll_forward_required must be true", errors
+        )
+        self.assertIn(
+            "projects[0].goal_contract: ordinary_recovery_autonomous must be true",
+            errors,
+        )
+
+    def test_manifest_v25_requires_small_architecture_project_autonomy(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["goal_contract"][
+            "autonomous_decision_scope"
+        ].remove("small_project_architecture")
+        self.assertIn(
+            "projects[0].goal_contract: autonomous_decision_scope must include the required ordinary implementation and recovery categories",
+            CONTROL.validate_manifest(manifest),
+        )
 
     def test_manifest_validation_keeps_v24_compatible_without_project_sweep(self):
         manifest = enable_v24_routine_public_network(valid_manifest())
@@ -667,6 +750,51 @@ class PortfolioControlTests(unittest.TestCase):
             errors,
         )
 
+    def test_v25_terminal_stage_requires_goal_roll_forward(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        result = topology["heartbeat_project_sweep"]["project_results"][0]
+        result["stage_terminal"] = True
+        errors = CONTROL.validate_topology(topology)
+        self.assertIn(
+            "topology.heartbeat_project_sweep.project_results[0]: terminal stage requires goal_rolled_forward",
+            errors,
+        )
+
+    def test_v25_topology_audit_rejects_project_goal_drift(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        topology["heartbeat_project_sweep"]["project_results"][0][
+            "goal_current_stage"
+        ] = "stale-stage"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertIn(
+            "HEARTBEAT_PROJECT_GOAL_DRIFT",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_v25_terminal_stage_accepts_updated_goal_and_next_dispatch(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        goal = manifest["projects"][0]["goal_contract"]
+        goal.update(
+            {
+                "current_stage": "integration",
+                "next_deliverable": "integrated acceptance candidate",
+            }
+        )
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        project_result = topology["heartbeat_project_sweep"]["project_results"][0]
+        project_result.update(
+            {
+                "stage_terminal": True,
+                "goal_rolled_forward": True,
+            }
+        )
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertTrue(result["ok"])
+
     def test_v25_multi_project_dispatch_starvation_cannot_silently_wait(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
         beta = copy.deepcopy(manifest["projects"][0])
@@ -689,7 +817,10 @@ class PortfolioControlTests(unittest.TestCase):
         beta_result.update(
             {
                 "project_id": "beta",
-                "evidence_ids": ["task-readback-beta-1"],
+                "evidence_ids": ["task-readback-beta-1", "goal-contract-beta-1"],
+                "goal_contract_evidence_id": "goal-contract-beta-1",
+                "goal_current_stage": beta["goal_contract"]["current_stage"],
+                "goal_next_deliverable": beta["goal_contract"]["next_deliverable"],
             }
         )
         sweep["project_results"].append(beta_result)
@@ -843,8 +974,17 @@ class PortfolioControlTests(unittest.TestCase):
                 "dispatched_task_id": None,
                 "owner_blocker_id": "owner-request-beta-1",
                 "reason": "only a credentialed owner action can unlock this stage",
-                "evidence_ids": ["task-readback-beta-1", "owner-request-beta-1"],
+                "evidence_ids": [
+                    "task-readback-beta-1",
+                    "owner-request-beta-1",
+                    "goal-contract-beta-1",
+                ],
                 "control_plane_issue": None,
+                "goal_contract_evidence_id": "goal-contract-beta-1",
+                "goal_current_stage": beta["goal_contract"]["current_stage"],
+                "goal_next_deliverable": beta["goal_contract"]["next_deliverable"],
+                "stage_terminal": False,
+                "goal_rolled_forward": False,
             }
         )
         sweep["source_evidence"]["manifest_sha256"] = CONTROL.sha256_text(

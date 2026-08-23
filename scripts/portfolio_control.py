@@ -128,6 +128,10 @@ HEARTBEAT_PROJECT_SWEEP_TRUE_FIELDS = (
     "recompute_after_terminal",
     "blocked_project_does_not_pause_portfolio",
     "global_wait_only_when_no_safe_action",
+    "project_goal_contract_required",
+    "stage_terminal_roll_forward_required",
+    "missing_goal_cannot_force_global_waiting",
+    "single_project_blocker_cannot_force_global_waiting",
 )
 HEARTBEAT_PROJECT_SWEEP_CLASSIFICATIONS = {
     "DISPATCHED",
@@ -182,6 +186,44 @@ CONTROL_PLANE_ESCALATION_PACKET_FIELDS = {
     "user_decision_required",
     "immediate_safe_actions",
 }
+PROJECT_GOAL_CONTRACT_FIELDS = (
+    "final_goal",
+    "current_stage",
+    "next_deliverable",
+    "acceptance_evidence",
+    "autonomous_decision_scope",
+    "stop_conditions",
+    "owner_only_exceptions",
+    "next_stage_trigger",
+    "roll_forward_required",
+    "ordinary_recovery_autonomous",
+)
+PROJECT_GOAL_AUTONOMOUS_SCOPE_REQUIRED = {
+    "implementation",
+    "test",
+    "build",
+    "mechanical_recovery",
+    "path_recovery",
+    "harness_recovery",
+    "small_project_architecture",
+    "local_git_closeout",
+}
+PROJECT_GOAL_STOP_CONDITIONS_REQUIRED = {
+    "first_formal_or_native_nonzero",
+    "scope_or_writer_conflict",
+    "owner_only_exception",
+    "acceptance_complete",
+}
+PROJECT_GOAL_OWNER_ONLY_EXCEPTIONS_REQUIRED = {
+    "cross_project_conflict",
+    "major_architecture",
+    "authority_escalation",
+    "credential_or_private_data",
+    "production_release_or_deployment",
+    "cross_host_migration",
+    "destructive_or_irreversible_external_write",
+}
+PROJECT_GOAL_NEXT_STAGE_TRIGGER = "STAGE_TERMINAL"
 FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES = {
     "control_read",
     "manifest_read",
@@ -552,6 +594,68 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
     return errors
 
 
+def validate_project_goal_contract(value: Any, context: str) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{context}: must be an object"]
+    errors = require_fields(value, list(PROJECT_GOAL_CONTRACT_FIELDS), context)
+    if errors:
+        return errors
+    for field in ("final_goal", "current_stage", "next_deliverable"):
+        if not is_non_empty_string(value[field]):
+            errors.append(f"{context}: {field} must be a non-empty string")
+    acceptance_evidence = value["acceptance_evidence"]
+    if (
+        not is_string_list(acceptance_evidence)
+        or not acceptance_evidence
+        or len(acceptance_evidence) != len(set(acceptance_evidence or []))
+    ):
+        errors.append(
+            f"{context}: acceptance_evidence must be a non-empty unique string array"
+        )
+    autonomous_decision_scope = value["autonomous_decision_scope"]
+    if (
+        not is_string_list(autonomous_decision_scope)
+        or len(autonomous_decision_scope)
+        != len(set(autonomous_decision_scope or []))
+        or not PROJECT_GOAL_AUTONOMOUS_SCOPE_REQUIRED.issubset(
+            set(autonomous_decision_scope or [])
+        )
+    ):
+        errors.append(
+            f"{context}: autonomous_decision_scope must include the required ordinary implementation and recovery categories"
+        )
+    stop_conditions = value["stop_conditions"]
+    if (
+        not is_string_list(stop_conditions)
+        or len(stop_conditions) != len(set(stop_conditions or []))
+        or not PROJECT_GOAL_STOP_CONDITIONS_REQUIRED.issubset(
+            set(stop_conditions or [])
+        )
+    ):
+        errors.append(
+            f"{context}: stop_conditions must include the required round, ownership, owner-gate, and acceptance boundaries"
+        )
+    owner_only_exceptions = value["owner_only_exceptions"]
+    if (
+        not is_string_list(owner_only_exceptions)
+        or len(owner_only_exceptions) != len(set(owner_only_exceptions or []))
+        or set(owner_only_exceptions)
+        != PROJECT_GOAL_OWNER_ONLY_EXCEPTIONS_REQUIRED
+    ):
+        errors.append(
+            f"{context}: owner_only_exceptions must list the exact V2.5 owner gates"
+        )
+    if value["next_stage_trigger"] != PROJECT_GOAL_NEXT_STAGE_TRIGGER:
+        errors.append(
+            f"{context}: next_stage_trigger must be {PROJECT_GOAL_NEXT_STAGE_TRIGGER}"
+        )
+    if value["roll_forward_required"] is not True:
+        errors.append(f"{context}: roll_forward_required must be true")
+    if value["ordinary_recovery_autonomous"] is not True:
+        errors.append(f"{context}: ordinary_recovery_autonomous must be true")
+    return errors
+
+
 def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     errors = require_fields(
         manifest,
@@ -568,6 +672,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     policy = manifest["policy"]
     manifest_governance_mode = "root_controller"
     project_owner_autonomy_present = False
+    project_owner_contract_version = None
     if not isinstance(policy, dict):
         errors.append("manifest: policy must be an object")
     else:
@@ -604,8 +709,14 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             )
         project_owner_autonomy_present = "project_owner_autonomy" in policy
         if project_owner_autonomy_present:
+            autonomy = policy["project_owner_autonomy"]
+            project_owner_contract_version = (
+                autonomy.get("contract_version")
+                if isinstance(autonomy, dict)
+                else None
+            )
             errors.extend(
-                validate_project_owner_autonomy(policy["project_owner_autonomy"])
+                validate_project_owner_autonomy(autonomy)
             )
     projects = manifest["projects"]
     if not isinstance(projects, list) or not projects:
@@ -691,6 +802,17 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"{context}.repository: full_name must be null or a non-empty string"
                 )
+        if project_owner_contract_version == PROJECT_TASK_CONTRACT_V2_5:
+            if "goal_contract" not in project:
+                errors.append(
+                    f"{context}: {PROJECT_TASK_CONTRACT_V2_5} requires goal_contract"
+                )
+            else:
+                errors.extend(
+                    validate_project_goal_contract(
+                        project["goal_contract"], f"{context}.goal_contract"
+                    )
+                )
     return errors
 
 
@@ -775,6 +897,11 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
             "reason",
             "evidence_ids",
             "control_plane_issue",
+            "goal_contract_evidence_id",
+            "goal_current_stage",
+            "goal_next_deliverable",
+            "stage_terminal",
+            "goal_rolled_forward",
         ]
         for index, result in enumerate(project_results):
             result_context = f"{context}.project_results[{index}]"
@@ -826,6 +953,32 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
             ):
                 errors.append(
                     f"{result_context}: evidence_ids must be a non-empty unique string array"
+                )
+            goal_contract_evidence_id = result["goal_contract_evidence_id"]
+            if not is_non_empty_string(goal_contract_evidence_id):
+                errors.append(
+                    f"{result_context}: goal_contract_evidence_id must be non-empty"
+                )
+            elif (
+                is_string_list(result["evidence_ids"])
+                and goal_contract_evidence_id not in result["evidence_ids"]
+            ):
+                errors.append(
+                    f"{result_context}: evidence_ids must include goal_contract_evidence_id"
+                )
+            for field in ("goal_current_stage", "goal_next_deliverable"):
+                if not is_non_empty_string(result[field]):
+                    errors.append(f"{result_context}: {field} must be non-empty")
+            for field in ("stage_terminal", "goal_rolled_forward"):
+                if not isinstance(result[field], bool):
+                    errors.append(f"{result_context}: {field} must be boolean")
+            if result["stage_terminal"] is True and result["goal_rolled_forward"] is not True:
+                errors.append(
+                    f"{result_context}: terminal stage requires goal_rolled_forward"
+                )
+            if result["stage_terminal"] is False and result["goal_rolled_forward"] is not False:
+                errors.append(
+                    f"{result_context}: non-terminal stage cannot claim goal_rolled_forward"
                 )
             if classification == "DISPATCHED":
                 safe_action_count += 1
@@ -1758,6 +1911,21 @@ def audit_topology(
                 result = sweep_results[project_id]
                 project = projects[project_id]
                 classification = result["classification"]
+                goal_contract = project.get("goal_contract")
+                if isinstance(goal_contract, dict) and (
+                    result["goal_current_stage"] != goal_contract["current_stage"]
+                    or result["goal_next_deliverable"]
+                    != goal_contract["next_deliverable"]
+                ):
+                    finding(
+                        "HEARTBEAT_PROJECT_GOAL_DRIFT",
+                        "the heartbeat classification must use the manifest project's current goal stage",
+                        project_id=project_id,
+                        expected_current_stage=goal_contract["current_stage"],
+                        observed_current_stage=result["goal_current_stage"],
+                        expected_next_deliverable=goal_contract["next_deliverable"],
+                        observed_next_deliverable=result["goal_next_deliverable"],
+                    )
                 if (
                     classification == "COMPLETE_FROZEN"
                     and project["state"] not in {"complete", "frozen"}

@@ -69,6 +69,10 @@ or production data in it.
         "recompute_after_terminal": true,
         "blocked_project_does_not_pause_portfolio": true,
         "global_wait_only_when_no_safe_action": true,
+        "project_goal_contract_required": true,
+        "stage_terminal_roll_forward_required": true,
+        "missing_goal_cannot_force_global_waiting": true,
+        "single_project_blocker_cannot_force_global_waiting": true,
         "classifications": [
           "DISPATCHED",
           "ALREADY_ACTIVE",
@@ -137,6 +141,40 @@ or production data in it.
       "authorities": ["control_read", "repo_read"],
       "state": "ready",
       "desired_outcome": "Publish a private GitHub mirror",
+      "goal_contract": {
+        "final_goal": "Publish the authorized private mirror with remote readback.",
+        "current_stage": "implementation",
+        "next_deliverable": "verified repository candidate",
+        "acceptance_evidence": ["focused-tests", "remote-main-readback"],
+        "autonomous_decision_scope": [
+          "implementation",
+          "test",
+          "build",
+          "mechanical_recovery",
+          "path_recovery",
+          "harness_recovery",
+          "small_project_architecture",
+          "local_git_closeout"
+        ],
+        "stop_conditions": [
+          "first_formal_or_native_nonzero",
+          "scope_or_writer_conflict",
+          "owner_only_exception",
+          "acceptance_complete"
+        ],
+        "owner_only_exceptions": [
+          "cross_project_conflict",
+          "major_architecture",
+          "authority_escalation",
+          "credential_or_private_data",
+          "production_release_or_deployment",
+          "cross_host_migration",
+          "destructive_or_irreversible_external_write"
+        ],
+        "next_stage_trigger": "STAGE_TERMINAL",
+        "roll_forward_required": true,
+        "ordinary_recovery_autonomous": true
+      },
       "repository": {
         "provider": "github",
         "full_name": null,
@@ -207,6 +245,19 @@ or production data in it.
   `user_decision_required`, and `immediate_safe_actions`. Safe projects continue.
   One project's ordinary implementation architecture remains with that owner unless
   it crosses the existing major-architecture owner gate.
+- Every V2.5 project has a `goal_contract`. `final_goal`, `current_stage`,
+  `next_deliverable`, and non-empty `acceptance_evidence` make progress concrete.
+  `autonomous_decision_scope` must cover ordinary implementation, tests, builds,
+  mechanical/path/harness recovery, small project-local architecture, and local Git
+  closeout. `stop_conditions` retain first-nonzero, scope/writer, owner-gate, and
+  acceptance boundaries. `owner_only_exceptions` are exactly cross-project conflict,
+  major architecture, authority escalation, credentials/private data, production
+  release/deploy, cross-host migration, and destructive or irreversible external
+  writes. `next_stage_trigger=STAGE_TERMINAL`, `roll_forward_required=true`, and
+  `ordinary_recovery_autonomous=true` require a terminal stage to update the current
+  stage and next deliverable before the next action is dispatched. A missing goal is
+  a governance defect and cannot become silent global waiting; one project blocker
+  cannot pause independent projects. V2.4 projects do not require this block.
 - In federated mode, grant each owner only its project-local envelope, such as
   `project_local_decide`, `project_local_admission`, `project_execute`, and the
   exact repository/test/delivery authorities it needs. These never imply external

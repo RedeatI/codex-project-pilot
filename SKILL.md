@@ -156,6 +156,14 @@ host identity, or evidence boundaries.
    `WAITING` is valid only after the full sweep proves no safe action; route a true
    owner-only blocker through the liaison. V2.4 manifests remain compatible but do
    not claim a V2.5 sweep.
+   Every V2.5 project must also declare a `PROJECT_GOAL_CONTRACT` with final goal,
+   current stage, next deliverable, acceptance evidence, autonomous decision scope,
+   stop conditions, owner-only exceptions, and a terminal next-stage trigger.
+   Require `roll_forward_required=true` and `ordinary_recovery_autonomous=true`.
+   Ordinary mechanical, path, harness, and small project-local architecture recovery
+   stays with the writer. A terminal stage updates the goal and rolls forward before
+   the next dispatch. A missing goal is a governance conflict, not global waiting;
+   one blocked goal never pauses safe siblings.
    Treat multi-project start failure, heartbeat next-stage derivation or dispatch
    failure, a parallelism anomaly, long-idle tasks caused by control state, or a
    governance/user-goal conflict as a control-plane architecture escalation. Send a

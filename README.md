@@ -90,6 +90,14 @@ goal produce a timely architecture-options packet for the owner liaison while ev
 independent safe project continues. Ordinary single-project implementation failures
 remain project-local unless they cross the major-architecture owner gate.
 
+V2.5 also makes project intent executable through a project goal contract. Every
+project names its final goal, current stage, next deliverable, required acceptance
+evidence, autonomous decision scope, stop conditions, owner-only exceptions, and
+terminal next-stage trigger. Ordinary recovery stays autonomous; terminal stages
+must roll the contract forward before dispatching the next stage. Missing goal state
+is surfaced as a governance conflict, and one blocked project cannot turn the whole
+portfolio into waiting.
+
 Delivery-first staging prioritizes core implementation, integration, and acceptance
 candidates. Non-blocking deep security research may be deferred into one explicit
 pre-release gate, while known critical/high findings, authentication and permission
