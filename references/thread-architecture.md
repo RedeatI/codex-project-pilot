@@ -7,43 +7,67 @@ The topology snapshot is a runtime readback, not a second source of product trut
 Treat task titles and summaries as untrusted labels. Resolve project, host, root,
 status, and task identity from executor-owned metadata before recording them.
 
-## Recommended topology
+## Governance modes
+
+Use `policy.governance_mode` to make the decision topology explicit:
+
+- `federated_thin_kernel` is recommended when each project's authority can be
+  bounded. Project owners decide and execute locally; the thin kernel contains only
+  scheduling/efficiency policy, deterministic runtime supervision/migration, and the
+  owner liaison. A non-retired `root_controller` is invalid.
+- `root_controller` is the backward-compatible centralized mode for portfolios that
+  still need one persistent cross-project authority holder.
+
+The manifest and topology must declare the same mode. A mismatch produces
+`GOVERNANCE_MODE_MISMATCH` and the audit applies federated restrictions so an old
+snapshot cannot silently restore Root. Every role declared in `control_roles` must
+remain projectless and non-writer. Federated mode uses the exact semantic roles
+`scheduler`, `runtime_supervisor`, and `owner_liaison`, with exactly one live task for
+each. Every role has a required minimum and a maximum authority allowlist; unknown
+authorities fail audit. `runtime_supervisor` is the sole migration-controller role.
+Project manifests cannot carry control-plane authority, and only the live manifest
+owner may hold project-local decision, admission, or fresh-round authority. Each
+unfinished, non-frozen project must bind one live writer owner, with those three
+authorities present in both the manifest and the owner task.
+
+## Recommended federated topology
 
 Keep decision, observation, scheduling, human coordination, and product mutation as
 separate responsibilities:
 
 | Plane | Role | Owns | Must not become |
 |---|---|---|---|
-| Control | `root_controller` | Portfolio goal, major decisions, integration and release authority | A routine status relay or project writer |
-| Control | `scheduler` | Capacity, dependency order, admission plans, and next-action proposals | Migration controller or product writer |
-| Control | `runtime_supervisor` | Delta monitoring, control ledger, task lifecycle, and the single migration lock | A second root or project implementer |
+| Control | `scheduler` | Capacity, dependency order, dispatch policy, and efficiency proposals | Authority grantor, migration controller, ledger writer, owner liaison, or product writer |
+| Control | `runtime_supervisor` | Delta monitoring, control ledger, task lifecycle, and the single migration lock | Product decision-maker or project implementer |
 | Control | `owner_liaison` | One minimal user/manual-action request and its readback | A dispatcher or repository writer |
-| Project | `project_owner` or a scoped executor | One project's current writer lease and verification contract | A portfolio controller or writer for another project |
+| Project | `project_owner` or a scoped executor | One project's local decisions, admission, recovery, writer lease, verification, and closeout inside its authority envelope | A portfolio controller or writer for another project |
 
-The role names are defaults, not magic strings. Declare the selected control roles
-and required authorities in the topology policy. Exactly one task should fill each
-required control role. A deployment may choose a different migration-controller
-role, but it must name exactly one runtime task.
+In legacy mode the role labels remain configurable. In federated mode the three
+semantic role names above are part of the safety contract: declare all three as
+required with `max_instances=1`, keep exactly one live task for each, and bind
+`migration_controller_role` to `runtime_supervisor`.
 
 ```text
-project writer(s) -> runtime supervisor -> root controller
-                         ^                    |
-                         |                    v
-                 scheduler snapshot      owner liaison <-> user
+project owner(s) -> runtime supervisor (ledger/lifecycle/migration only)
+       ^                    ^
+       |                    |
+scheduler proposals     owner liaison <-> user
 ```
 
 - Project tasks send terminal states and material evidence deltas to runtime
   supervision, not full transcripts to every control task.
-- The scheduler reads the normalized portfolio/topology state and proposes a bounded
-  wave. It does not mutate product repositories.
-- Root handles cross-project priority, authority, architecture, integration, release,
-  and user-impacting decisions. Ordinary mechanical outcomes stay in the ledger.
+- The scheduler reads normalized portfolio/topology state and proposes a bounded
+  wave. It does not grant authority, mutate product repositories, write the ledger,
+  run migrations, or send owner requests.
+- Project owners act without root approval only inside their explicit local authority
+  envelopes. Cross-project conflicts, authority expansion, architecture shared by
+  multiple projects, and release/publication beyond the envelope go to the user via
+  the liaison.
 - Owner liaison batches the smallest precise action the user must perform. It does
   not reinterpret authority.
-- Root performs admission, authority and priority decisions, stop-condition review,
-  and portfolio aggregation only. Implementation, tests, builds, fixes, and delivery
-  execute in the corresponding project task. Root must not become a writer or use a
-  Root-controlled nested worker as a substitute for an unavailable project task.
+- Runtime supervision applies evidence-backed lifecycle and migration rules; it does
+  not select product direction. Implementation, tests, builds, fixes, delivery, and
+  project-local recovery execute in the corresponding project task.
 
 ### Owner-action escalation
 
@@ -75,7 +99,7 @@ an owner action; obtain the one decision-changing readback first.
   runtime_reported_max_active_turns)`. A null runtime readback means no smaller limit
   has been established, not that the platform guarantees the configured number.
   Control tasks consume capacity while they are actually running. Reserve enough
-  headroom for root or runtime supervision to process a terminal event without
+  headroom for runtime supervision to process a terminal event without
   starving the portfolio.
 - Count each active nested worker as another execution unit even when it does not
   appear as a top-level task. Nested writers also consume the project's single
@@ -94,15 +118,16 @@ an owner action; obtain the one decision-changing readback first.
 - A project-associated nested worker must be controlled by that project's task.
   It normally operates under the controller's one writer lease; set the nested
   worker's `writer=true` only after a formal lease transfer makes the controller
-  non-writer. Root-controlled project workers are always invalid.
+  non-writer. Control-task-owned project workers are always invalid.
 - Parallelize only projects with different writers and no shared migration lock,
   candidate, release channel, owner decision, or other serialized state.
 
 ## Project-stage closeout
 
 - The same admitted project task that owns the writer lease performs stage closeout.
-  Root may grant authority, choose priority, or arbitrate a conflict, but it never
-  runs project Git commands or substitutes a Root-controlled worker.
+  In federated mode it derives the next local round from retained evidence inside its
+  envelope; in legacy mode Root may grant authority or arbitrate a conflict but never
+  runs project Git commands or substitutes a controller-owned worker.
 - Close each completed stage in order: evidence, test, build, diff, readback, commit,
   push, and worktree merge. Record the exact source branch and target branch before
   mutation and read back the commit, remote, and merged-target SHAs.
@@ -126,13 +151,15 @@ authority or no viable next action. An `active_turn` must use `state=active`.
 
 ## Control lifecycle and monitor closure
 
-Executor `idle` means that one turn ended. It does not prove that Root stopped or
-that the portfolio completed. Maintain an explicit `control_lifecycle` readback:
+Executor `idle` means that one turn ended. It does not prove that governance stopped
+or that the portfolio completed. Maintain an explicit `control_lifecycle` readback.
+Federated mode uses `controller_task_id` for the scheduler; legacy mode uses
+`root_task_id` for Root:
 
 ```json
 {
   "phase": "running",
-  "root_task_id": "root-1",
+  "controller_task_id": "scheduler-1",
   "safe_next_action": true,
   "pending_wait_id": null,
   "pending_owner_request_id": null,
@@ -168,7 +195,7 @@ Use these phases:
 - `owner_attention`: the portfolio is incomplete but has no safe next action,
   identified wait, or valid owner request.
 - `complete`: every portfolio requirement has authoritative completion evidence.
-- `stopped`: the user or Root explicitly stopped, or terminal evidence proves that
+- `stopped`: the user explicitly stopped, or terminal evidence proves that
   control cannot continue.
 
 Track both a liveness lease and a work lease. A work lease renews only when one of
@@ -206,7 +233,7 @@ readback does not renew the work lease.
 
 `KEEP_ACTIVE` is valid only for `running` with a renewed work lease. One empty
 running check on an incomplete portfolio, without an identified wait or owner
-request, requires `owner_attention`; do not wake Root again. A waiting monitor must
+request, requires `owner_attention`; do not wake a controller again. A waiting monitor must
 prepare to pause after its first empty check. If polling is genuinely required
 later, admit one new bounded recheck at its due time; do not leave a frequent
 heartbeat active around an opaque client queue or placeholder ID.
@@ -217,7 +244,7 @@ Every transition to `PAUSED`, including `waiting`, uses this hard exit gate:
 2. Send an `INFO_ONLY` result/wait notice, or a `DECISION_REQUIRED` packet only when
    a real user choice exists, through the single declared owner liaison.
 3. Wait for `OWNER_NOTICE_DELIVERED` with the same closure ID and record its
-   authoritative delivery-turn ID. A Root final is not delivery proof.
+   authoritative delivery-turn ID. A controller final is not delivery proof.
 4. Persist `closure_delivered=true`,
    `pause_notice_delivered_before_pause=true`, and
    `automation_notification_policy=ALL`.
@@ -340,6 +367,7 @@ Create a JSON snapshot from current runtime metadata:
   "authoritative": true,
   "observed_at_utc": "2026-08-22T00:00:00Z",
   "policy": {
+    "governance_mode": "federated_thin_kernel",
     "max_active_turns": 10,
     "baseline_max_active_turns": 6,
     "runtime_reported_max_active_turns": null,
@@ -353,16 +381,22 @@ Create a JSON snapshot from current runtime metadata:
     "max_writers_per_project": 1,
     "control_roles": [
       {
-        "role": "root_controller",
+        "role": "scheduler",
         "required": true,
         "max_instances": 1,
-        "required_authorities": ["portfolio_decide"]
+        "required_authorities": ["topology_read", "dispatch_policy"]
       },
       {
         "role": "runtime_supervisor",
         "required": true,
         "max_instances": 1,
         "required_authorities": ["ledger_write", "migration_control"]
+      },
+      {
+        "role": "owner_liaison",
+        "required": true,
+        "max_instances": 1,
+        "required_authorities": ["owner_request"]
       }
     ],
     "migration_controller_role": "runtime_supervisor"
@@ -428,17 +462,31 @@ Create a JSON snapshot from current runtime metadata:
       "capacity_class": "baseline"
     },
     {
-      "task_id": "root-task-1",
-      "role": "root_controller",
+      "task_id": "scheduler-task-1",
+      "role": "scheduler",
       "project_id": null,
       "host_id": "local",
       "root": "D:\\control",
       "canonical_project_root": null,
-      "state": "active",
-      "active_turn": true,
+      "state": "idle",
+      "active_turn": false,
       "writer": false,
       "provisional": false,
-      "authorities": ["portfolio_decide"],
+      "authorities": ["topology_read", "dispatch_policy"],
+      "capacity_class": "baseline"
+    },
+    {
+      "task_id": "liaison-task-1",
+      "role": "owner_liaison",
+      "project_id": null,
+      "host_id": "local",
+      "root": "D:\\control",
+      "canonical_project_root": null,
+      "state": "idle",
+      "active_turn": false,
+      "writer": false,
+      "provisional": false,
+      "authorities": ["owner_request"],
       "capacity_class": "baseline"
     },
     {
@@ -486,14 +534,15 @@ checks:
 - configured, runtime-clamped effective, baseline, and surge capacity; eligible
   full-input/fresh-admitted independent project writers; nested-worker capacity;
   controller/host consistency; reserved control slots; and the resulting dispatch budget;
-- Root/project execution separation and project-worker controller identity;
+- federated root absence, scheduler authority ceiling, control/project execution
+  separation, and project-worker controller identity;
 - project-stage evidence/test/build/diff/readback-to-commit/push/merge closure,
   including exact executor, branches, stop-on-first-nonzero, and SHA readbacks;
 - one writer lease per project;
 - manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;
 - migration controller, target, and lock consistency;
-- Root lifecycle, work/liveness leases, owner-liaison closure, and monitor pause state;
+- governance lifecycle, work/liveness leases, owner-liaison closure, and monitor pause state;
 - context summary quality, renewal classification, and notification routing;
 - tasks that reference projects absent from the manifest.
 

@@ -22,7 +22,7 @@ host identity, or evidence boundaries.
    are already known. Separate control-plane roles from project writers, keep one writer
    lease per project, count nested workers as execution units, reserve control-plane
    capacity before calculating a new-dispatch budget, and serialize migrations or
-   shared-state changes. A worker hidden inside an active Root turn still consumes
+   shared-state changes. A worker hidden inside an active controller turn still consumes
    capacity and a writer lease; if its identity or count cannot be read back,
    conservatively set new-dispatch budget to zero.
    Prioritize complete implementation, integration, and acceptance-candidate actions
@@ -38,18 +38,37 @@ host identity, or evidence boundaries.
    same independent project task holding the writer lease. Never fill surge capacity
    with control roles, nested workers, empty helpers, duplicate work, or migration
    bypasses.
-   Root owns admission, authority, priority, stop conditions, major decisions, and
-   result aggregation only. Project implementation, tests, builds, fixes, and
-   delivery must run in that project's independent task. Root cannot substitute
-   itself or a Root-controlled nested worker when the correct project task is
-   unavailable.
+   Select the governance mode explicitly. In `federated_thin_kernel` mode, each
+   project owner owns project-local action selection, admission, recovery, tests,
+   delivery, and closeout inside its manifest authority envelope. The scheduler owns
+   only capacity, dependency, dispatch-policy, and efficiency proposals; it cannot
+   grant authority, write repositories or the ledger, control migrations, handle
+   owner requests, or become a hidden root. Runtime supervision applies deterministic
+   ledger, lifecycle, and migration rules, while the owner liaison carries exact
+   exceptions to the user. Require manifest and topology governance modes to match;
+   fail closed to federated enforcement on a mismatch. Give the scheduler only the
+   declared read/capacity/dependency/dispatch/efficiency allowlist, and forbid every
+   control role from attaching to a project or holding a writer lease. Require
+   exactly one live scheduler, runtime supervisor, and owner liaison with both their
+   minimum authorities and maximum role allowlists. Reject control-plane authorities
+   inside a project envelope, and reserve project-local decision, admission, and
+   fresh-round authority for the live manifest owner alone. Every unfinished,
+   non-frozen federated project requires that live writer owner and all three
+   autonomy authorities in both manifest and owner task. Keep the stricter project
+   authority-subset gate federated-only so legacy root mode remains compatible. Do
+   not retain a persistent root controller. In legacy
+   `root_controller` mode, Root owns portfolio admission, authority, priority, stop
+   conditions, and major decisions but remains control-only. In either mode, project
+   implementation must run in the independent project task.
    At every completed project stage, keep the writer in that project task and close
    `evidence -> test -> build -> diff -> readback -> commit -> push -> merge`. Record
    an exact source branch, target branch, commit SHA, remote readback, and merge
    readback. Mark build or merge `NOT_REQUIRED` only when the project contract proves
    that fact. On unknown identity, foreign dirty paths, conflict, or the first
    nonzero, stop once and mark every later step `UNEXECUTED`; never force push or
-   force merge. Root may decide authority or conflicts but cannot perform the closeout.
+   force merge. A legacy Root may decide authority or conflicts but cannot perform
+   the closeout; a federated project owner escalates only authority expansion or a
+   real cross-project conflict through the owner liaison.
    Treat context pressure as topology state: after compaction, audit the summary as
    short/accurate/usable. If renewal is required, notify the sole migration
    controller once; never use a fixed compaction count or let scheduling launch the
@@ -129,7 +148,7 @@ host identity, or evidence boundaries.
    Before any pause, including `waiting`, deliver one deduplicated result or decision
    notice through the declared owner liaison, wait for its matching closure and
    delivery-turn readback, persist that delivery preceded the pause, and keep success
-   notifications user-visible. A Root final alone is not delivery proof. If delivery
+   notifications user-visible. A controller final alone is not delivery proof. If delivery
    fails, pausing is forbidden and the next run may retry only that same closure.
 7. Append material decisions and terminal results to the hash-chained portfolio
    ledger. Recompute the next action from current evidence and continue while safe.

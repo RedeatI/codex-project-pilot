@@ -31,7 +31,13 @@ def valid_manifest():
                 "host_id": "local",
                 "root": str(Path.cwd()),
                 "owner_task_id": None,
-                "authorities": ["control_read", "repo_read"],
+                "authorities": [
+                    "control_read",
+                    "repo_read",
+                    "project_local_decide",
+                    "project_local_admission",
+                    "project_fresh_round_derive",
+                ],
                 "state": "ready",
                 "desired_outcome": "Verified private mirror",
                 "repository": {
@@ -74,7 +80,7 @@ def valid_topology():
                     "role": "scheduler",
                     "required": True,
                     "max_instances": 1,
-                    "required_authorities": ["topology_read"],
+                    "required_authorities": ["topology_read", "dispatch_policy"],
                 },
                 {
                     "role": "runtime_supervisor",
@@ -150,7 +156,7 @@ def valid_topology():
                 "active_turn": False,
                 "writer": False,
                 "provisional": False,
-                "authorities": ["topology_read"],
+                "authorities": ["topology_read", "dispatch_policy"],
                 "capacity_class": "baseline",
             },
             {
@@ -189,11 +195,39 @@ def valid_topology():
                 "active_turn": True,
                 "writer": True,
                 "provisional": False,
-                "authorities": ["repo_write"],
+                "authorities": ["repo_read"],
                 "capacity_class": "baseline",
             },
         ],
     }
+
+
+def valid_federated_topology():
+    topology = valid_topology()
+    topology["policy"]["governance_mode"] = "federated_thin_kernel"
+    topology["policy"]["control_roles"] = [
+        definition
+        for definition in topology["policy"]["control_roles"]
+        if definition["role"] != "root_controller"
+    ]
+    lifecycle = topology["control_lifecycle"]
+    lifecycle["controller_task_id"] = "scheduler-1"
+    del lifecycle["root_task_id"]
+    topology["threads"] = [
+        thread
+        for thread in topology["threads"]
+        if thread["role"] != "root_controller"
+    ]
+    owner = next(
+        thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+    )
+    owner["authorities"] = [
+        "repo_read",
+        "project_local_decide",
+        "project_local_admission",
+        "project_fresh_round_derive",
+    ]
+    return topology
 
 
 def valid_stage_closeout():
@@ -229,6 +263,15 @@ def valid_stage_closeout():
 class PortfolioControlTests(unittest.TestCase):
     def test_manifest_validation(self):
         self.assertEqual(CONTROL.validate_manifest(valid_manifest()), [])
+
+    def test_federated_manifest_rejects_project_control_plane_authority(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        manifest["projects"][0]["authorities"].append("portfolio_decide")
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertTrue(
+            any("control-plane authorities: portfolio_decide" in error for error in errors)
+        )
 
     def test_admission_stops_after_first_nonzero(self):
         plan = {
@@ -329,6 +372,294 @@ class PortfolioControlTests(unittest.TestCase):
         self.assertEqual(result["reserved_control_slots"], 1)
         self.assertEqual(result["new_dispatch_budget"], 0)
         self.assertEqual(result["writer_counts"], {"alpha": 1})
+
+    def test_topology_audit_accepts_federated_thin_kernel(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        result = CONTROL.audit_topology(manifest, valid_federated_topology())
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["governance_mode"], "federated_thin_kernel")
+
+    def test_topology_audit_rejects_nonretired_root_in_federated_mode(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        root = copy.deepcopy(valid_topology()["threads"][0])
+        topology["threads"].append(root)
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_ROOT_CONTROLLER_FORBIDDEN",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_scheduler_authority_escalation(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        scheduler = next(
+            thread for thread in topology["threads"] if thread["role"] == "scheduler"
+        )
+        scheduler["authorities"].append("portfolio_decide")
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_SCHEDULER_AUTHORITY_ESCALATION",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_fails_closed_on_manifest_topology_mode_mismatch(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        result = CONTROL.audit_topology(manifest, valid_topology())
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["governance_mode"], "federated_thin_kernel")
+        self.assertIn("GOVERNANCE_MODE_MISMATCH", codes)
+        self.assertIn("FEDERATED_ROOT_CONTROLLER_FORBIDDEN", codes)
+
+    def test_topology_audit_rejects_control_role_as_project_writer(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        scheduler = next(
+            thread for thread in topology["threads"] if thread["role"] == "scheduler"
+        )
+        scheduler["project_id"] = "alpha"
+        scheduler["writer"] = True
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "CONTROL_PROJECT_EXECUTION_FORBIDDEN",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_unknown_scheduler_authority(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        scheduler = next(
+            thread for thread in topology["threads"] if thread["role"] == "scheduler"
+        )
+        scheduler["authorities"].append("authority_grant")
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_SCHEDULER_AUTHORITY_ESCALATION",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_scheduler_as_migration_controller(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        topology["policy"]["migration_controller_role"] = "scheduler"
+        topology["migration"]["controller_task_id"] = "scheduler-1"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_MIGRATION_CONTROLLER_ROLE_INVALID",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_runtime_or_liaison_authority_escalation(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        runtime = next(
+            thread
+            for thread in topology["threads"]
+            if thread["role"] == "runtime_supervisor"
+        )
+        liaison = next(
+            thread
+            for thread in topology["threads"]
+            if thread["role"] == "owner_liaison"
+        )
+        runtime["authorities"].append("portfolio_decide")
+        liaison["authorities"].append("repo_write")
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        escalations = [
+            finding
+            for finding in result["findings"]
+            if finding["code"] == "FEDERATED_CONTROL_AUTHORITY_ESCALATION"
+        ]
+        self.assertEqual(len(escalations), 2)
+
+    def test_topology_audit_rejects_renamed_hidden_controller(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        topology["policy"]["control_roles"].append(
+            {
+                "role": "portfolio_governor",
+                "required": True,
+                "max_instances": 1,
+                "required_authorities": ["portfolio_decide"],
+            }
+        )
+        governor = copy.deepcopy(topology["threads"][0])
+        governor["task_id"] = "governor-1"
+        governor["role"] = "portfolio_governor"
+        governor["authorities"] = ["portfolio_decide"]
+        topology["threads"].append(governor)
+        result = CONTROL.audit_topology(manifest, topology)
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertFalse(result["ok"])
+        self.assertIn("FEDERATED_CONTROL_ROLE_NOT_ALLOWED", codes)
+        self.assertIn("FEDERATED_NON_PROJECT_ROLE_NOT_ALLOWED", codes)
+
+    def test_topology_audit_rejects_project_authority_outside_manifest(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        owner = next(
+            thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+        )
+        owner["authorities"].append("repo_write")
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PROJECT_AUTHORITY_OUTSIDE_MANIFEST",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_validation_handles_malformed_policy_without_exception(self):
+        topology = valid_topology()
+        topology["policy"] = []
+        errors = CONTROL.validate_topology(topology)
+        self.assertIn("topology.policy: must be an object", errors)
+
+    def test_topology_audit_requires_one_live_task_for_each_thin_kernel_role(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        liaison = next(
+            thread
+            for thread in topology["threads"]
+            if thread["role"] == "owner_liaison"
+        )
+        liaison["state"] = "retired"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_LIVE_CONTROL_ROLE_COUNT_INVALID",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_retired_federated_migration_controller(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        runtime = next(
+            thread
+            for thread in topology["threads"]
+            if thread["role"] == "runtime_supervisor"
+        )
+        runtime["state"] = "retired"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_MIGRATION_CONTROLLER_NOT_LIVE",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_requires_minimum_thin_kernel_authorities(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        topology = valid_federated_topology()
+        for definition in topology["policy"]["control_roles"]:
+            definition["required_authorities"] = []
+        for thread in topology["threads"]:
+            if thread["role"] in {
+                "scheduler",
+                "runtime_supervisor",
+                "owner_liaison",
+            }:
+                thread["authorities"] = []
+        result = CONTROL.audit_topology(manifest, topology)
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertFalse(result["ok"])
+        self.assertIn("FEDERATED_CONTROL_POLICY_AUTHORITY_MINIMUM_MISSING", codes)
+        self.assertIn("FEDERATED_CONTROL_RUNTIME_AUTHORITY_MINIMUM_MISSING", codes)
+
+    def test_topology_audit_rejects_non_live_manifest_owner(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = valid_federated_topology()
+        owner = next(
+            thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+        )
+        owner["state"] = "retired"
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "OWNER_TASK_NOT_LIVE",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_reserves_project_local_governance_for_owner(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = valid_federated_topology()
+        scoped = copy.deepcopy(
+            next(
+                thread
+                for thread in topology["threads"]
+                if thread["task_id"] == "alpha-owner"
+            )
+        )
+        scoped["task_id"] = "alpha-scoped"
+        scoped["writer"] = False
+        scoped["authorities"] = ["project_local_decide"]
+        topology["threads"].append(scoped)
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PROJECT_OWNER_ONLY_AUTHORITY_HELD_BY_NON_OWNER",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_requires_owner_for_unfinished_federated_project(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        result = CONTROL.audit_topology(manifest, valid_federated_topology())
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "FEDERATED_PROJECT_OWNER_REQUIRED",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_requires_owner_autonomy_authority_minimum(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        manifest["projects"][0]["authorities"] = ["control_read", "repo_read"]
+        topology = valid_federated_topology()
+        owner = next(
+            thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+        )
+        owner["authorities"] = ["repo_read"]
+        result = CONTROL.audit_topology(manifest, topology)
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertFalse(result["ok"])
+        self.assertIn("FEDERATED_PROJECT_AUTHORITY_MINIMUM_MISSING", codes)
+        self.assertIn("FEDERATED_PROJECT_OWNER_AUTHORITY_MINIMUM_MISSING", codes)
+
+    def test_legacy_topology_preserves_project_authority_compatibility(self):
+        manifest = valid_manifest()
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = valid_topology()
+        owner = next(
+            thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+        )
+        owner["authorities"] = ["repo_write"]
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertTrue(result["ok"])
 
     def test_topology_audit_counts_nested_workers_in_capacity(self):
         topology = valid_topology()

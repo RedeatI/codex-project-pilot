@@ -8,14 +8,17 @@ thread-topology audits, first-nonzero formal-round semantics, a hash-chained
 decision ledger, long-contract routing, and privacy-gated GitHub publication
 guidance.
 
-The recommended topology separates four control-plane responsibilities (root
-decisions, scheduling, runtime supervision/migrations, and owner liaison) from
-project execution. Runtime snapshots make duplicate control roles, stale owners,
-unfenced migrations, excess active turns, and multiple project writers visible
-before they become coordination failures.
+The recommended `federated_thin_kernel` topology puts project-local decisions,
+admission, recovery, verification, and closeout in each project's owner task. Its
+thin governance kernel retains only scheduling/efficiency policy, deterministic
+runtime supervision and migrations, and one owner liaison. There is no persistent
+root controller. The legacy `root_controller` mode remains available for portfolios
+whose shared authority cannot yet be partitioned. Runtime snapshots make authority
+creep, stale owners, unfenced migrations, excess active turns, and multiple project
+writers visible before they become coordination failures.
 
 High-concurrency audits count both visible active turns and nested workers, including
-workers hidden inside Root or another controller. A configurable control-slot reserve
+workers hidden inside a controller. A configurable control-slot reserve
 is subtracted before computing the new-dispatch budget, so unrelated active tasks and
 in-turn helpers cannot silently overcommit the host or starve terminal-event handling.
 The configured limit is policy, not a claim about the Codex platform: an authoritative
@@ -24,9 +27,20 @@ declared baseline is surge capacity and may carry only a complete, effective pro
 action with a fresh `ZERO` admission and the same independent project task holding its
 writer lease. Control roles, nested workers, filler work, and duplicate actions cannot
 consume surge slots.
-Root remains a control-only role: project mutation and verification run in the
-project's independent task, with one writer lease and compact evidence or major
-decision requests returned to Root.
+In federated mode, a project owner may decide and execute only inside its explicit
+project authority envelope. The scheduler may rank ready actions and optimize
+capacity, but cannot grant authority, mutate a repository, write the control ledger,
+run migrations, or act as a hidden root. Cross-project conflicts and authority
+expansion are routed through the owner liaison for an exact user decision. Manifest
+and topology governance modes must match; a mismatch fails closed to federated
+enforcement. Every declared control role is forbidden from attaching to a project or
+holding its writer lease. Federated mode requires exactly one live `scheduler`,
+`runtime_supervisor`, and `owner_liaison`; each has a minimum capability set and a
+maximum allowlist. Project envelopes cannot contain control-plane authorities, and
+only the manifest owner may hold project-local decision/admission/recovery authority.
+Every unfinished, non-frozen project must bind one live writer owner and give both
+the manifest envelope and that owner the three autonomy authorities. Legacy mode
+keeps its prior permissive project-authority behavior for compatibility.
 Each stage is preferably dispatched as one complete contract covering preflight,
 implementation or diagnosis, decision-changing tests/build, diff/readback, commit,
 non-force push, fast-forward merge, and target readback. Project-controlled

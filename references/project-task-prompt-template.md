@@ -3,14 +3,17 @@
 Contract version: `PROJECT_TASK_CONTRACT_V2_3`
 Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
 
-Use this compact contract for a project implementation task. Root uses a separate
-control-only contract and must not execute these project steps.
+Use this compact contract for a project implementation task. In federated mode the
+project owner selects and closes its own local rounds inside the declared authority
+envelope. In legacy root mode, Root uses a separate control-only contract and must
+not execute these project steps.
 
 ```text
 PROJECT_TASK_CONTRACT_V2_3
 PROJECT=<stable project id>
 ACTION_ID=<fresh exact action id>
 PROJECT_TASK_ID=<existing independent task id>
+GOVERNANCE_MODE=FEDERATED_THIN_KERNEL|ROOT_CONTROLLER
 HOST=<exact host scope and host id>
 ROOT=<exact canonical project root>
 SOURCE_BRANCH=<exact source branch>
@@ -19,6 +22,7 @@ STAGE_BOUNDARY=<authorized end state for this contract>
 OWNED_PATHS=<exact paths or exact generated-artifact boundary>
 WRITER_LEASE=<project id + holder task id + evidence id>
 AUTHORITIES=<exact granted authorities>
+AUTHORITY_ENVELOPE=<project-local decisions allowed and exact exclusions>
 INPUTS=<complete candidate/input identities and retained evidence ids>
 PRESERVED_STATE=<foreign dirty paths, retained candidates, evidence, and worktrees>
 OUTCOME=<smallest complete independently state-changing stage>
@@ -28,12 +32,23 @@ EXPECTED_READBACK=<exact artifacts, commands, SHAs, or runtime fields>
 MIGRATION_STATE=NOT_REQUIRED|RECOMMENDED|HANDOFF_ONLY|ACCEPTED
 
 ROLE_BOUNDARY
-- Root performs admission, authority, priority, stop-condition, conflict, major
-  decision, and summary work only.
+- In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
+  selection, admission, recovery, verification, and closeout inside
+  AUTHORITY_ENVELOPE. It does not wait for a portfolio root.
+- The scheduler may propose order and capacity only. It cannot grant authority,
+  write this project, write the control ledger, migrate tasks, or override this task.
+  It may hold only the scheduler authority allowlist and can never be this project's
+  owner or writer.
+- In ROOT_CONTROLLER mode, Root performs portfolio admission, authority, priority,
+  stop-condition, conflict, major-decision, and summary work only.
 - This existing project task alone performs implementation, focused tests, build,
   repair, commit, non-force push, and fast-forward merge for this project.
-- Do not create a substitute task, Root-controlled worker, filler task, or second
-  writer. Return evidence deltas and genuine major decisions to Root.
+- Do not create a substitute controller-owned worker, filler task, or second writer.
+  Return material evidence deltas to runtime supervision. Route only authority
+  expansion, cross-project conflicts, or owner-only actions through the liaison.
+- A scoped executor may use only its manifest subset. It cannot hold
+  project-local decision, admission, or fresh-round authority unless its exact task
+  ID is the live manifest `owner_task_id`.
 
 FACT_AND_AUTHORITY_BOUNDARY
 - Model judgment is not evidence. Plans, queue state, static checks, local output,
@@ -104,7 +119,7 @@ INTERNAL_RECOVERY_AND_REPORTING
   aggregation. Helpers do not hold the writer lease and cannot mutate the repository,
   Git state, remote state, or release channel.
 - Do not report routine half-steps, unchanged state, queue reminders, parser/path/
-  harness defects, or mechanically decidable outcomes to Root or the user. Return one
+  harness defects, or mechanically decidable outcomes to a controller or the user. Return one
   compact terminal evidence record. Coordinators aggregate actual dispatch and
   terminal deltas rather than commentary.
 - A first formal/native nonzero ends only this round. Preserve every retained PASS,

@@ -63,6 +63,98 @@ STAGE_CLOSEOUT_STEPS = (
     "merge",
 )
 CAPACITY_CLASSES = {"baseline", "surge"}
+GOVERNANCE_MODES = {"root_controller", "federated_thin_kernel"}
+FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES = {
+    "control_read",
+    "manifest_read",
+    "topology_read",
+    "ledger_read",
+    "capacity_plan",
+    "capacity_calculation",
+    "dispatch_budget_calculation",
+    "dependency_order",
+    "dependency_ordering",
+    "dispatch_policy",
+    "existing_project_wake",
+    "bounded_dispatch_wake_recommendation",
+    "deduplication",
+    "batching",
+    "efficiency_optimize",
+    "efficiency_optimization",
+}
+FEDERATED_RUNTIME_ALLOWED_AUTHORITIES = {
+    "control_read",
+    "topology_read",
+    "ledger_read",
+    "ledger_write",
+    "work_lease_audit",
+    "task_lifecycle",
+    "migration_control",
+    "migration_lock",
+    "handoff_control",
+    "successor_create",
+    "writer_transfer",
+    "recoverable_thread_archive",
+    "automation_read",
+    "automation_lifecycle",
+}
+FEDERATED_LIAISON_ALLOWED_AUTHORITIES = {
+    "control_read",
+    "owner_request",
+    "owner_response_read",
+    "user_delivery",
+    "notification_delivery",
+    "closure_delivery",
+    "manual_action_route",
+}
+FEDERATED_CONTROL_ROLE_AUTHORITIES = {
+    "scheduler": FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES,
+    "runtime_supervisor": FEDERATED_RUNTIME_ALLOWED_AUTHORITIES,
+    "owner_liaison": FEDERATED_LIAISON_ALLOWED_AUTHORITIES,
+}
+FEDERATED_CONTROL_ROLES = set(FEDERATED_CONTROL_ROLE_AUTHORITIES)
+FEDERATED_CONTROL_ROLE_MINIMUM_AUTHORITIES = {
+    "scheduler": {"topology_read", "dispatch_policy"},
+    "runtime_supervisor": {"ledger_write", "migration_control"},
+    "owner_liaison": {"owner_request"},
+}
+FEDERATED_PROJECT_FORBIDDEN_AUTHORITIES = (
+    set().union(*FEDERATED_CONTROL_ROLE_AUTHORITIES.values())
+    - {"control_read", "manifest_read", "topology_read", "ledger_read"}
+) | {
+    "portfolio_decide",
+    "authority_grant",
+    "authority_expand",
+    "authority_envelope_write",
+    "authority_envelope_rewrite",
+    "cross_project_decide",
+    "cross_project_write",
+    "control_policy_write",
+    "topology_snapshot_write",
+}
+FEDERATED_PROJECT_FORBIDDEN_AUTHORITY_PREFIXES = (
+    "portfolio_",
+    "cross_project_",
+    "authority_envelope_",
+    "control_policy_",
+    "migration_",
+)
+FEDERATED_PROJECT_OWNER_ONLY_AUTHORITIES = {
+    "project_local_decide",
+    "project_local_admission",
+    "project_fresh_round_derive",
+}
+LIVE_CONTROL_STATES = {"idle", "active", "waiting", "blocked"}
+FEDERATED_SCHEDULER_FORBIDDEN_AUTHORITIES = {
+    "portfolio_decide",
+    "project_local_decide",
+    "project_execute",
+    "repo_write",
+    "repo_write_local",
+    "ledger_write",
+    "migration_control",
+    "owner_request",
+}
 DISPATCH_REQUIREMENT_FIELDS = (
     "complete_input_required",
     "fresh_admission_required",
@@ -125,6 +217,12 @@ def is_enum_value(value: Any, choices: set[str]) -> bool:
     return isinstance(value, str) and value in choices
 
 
+def is_federated_project_control_authority(authority: str) -> bool:
+    return authority in FEDERATED_PROJECT_FORBIDDEN_AUTHORITIES or authority.startswith(
+        FEDERATED_PROJECT_FORBIDDEN_AUTHORITY_PREFIXES
+    )
+
+
 def effective_max_active_turns(policy: dict[str, Any]) -> int:
     configured = policy["max_active_turns"]
     runtime_reported = policy["runtime_reported_max_active_turns"]
@@ -145,6 +243,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         if not isinstance(manifest[field], str) or not manifest[field].strip():
             errors.append(f"manifest: {field} must be a non-empty string")
     policy = manifest["policy"]
+    manifest_governance_mode = "root_controller"
     if not isinstance(policy, dict):
         errors.append("manifest: policy must be an object")
     else:
@@ -171,6 +270,13 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         if not isinstance(policy.get("external_mutations_require_user_authorization"), bool):
             errors.append(
                 "policy: external_mutations_require_user_authorization must be boolean"
+            )
+        manifest_governance_mode = policy.get(
+            "governance_mode", "root_controller"
+        )
+        if not is_enum_value(manifest_governance_mode, GOVERNANCE_MODES):
+            errors.append(
+                "policy: governance_mode must be root_controller or federated_thin_kernel"
             )
     projects = manifest["projects"]
     if not isinstance(projects, list) or not projects:
@@ -213,6 +319,16 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             errors.append(f"{context}: authorities must be an array of strings")
         elif len(project["authorities"]) != len(set(project["authorities"])):
             errors.append(f"{context}: authorities must not contain duplicates")
+        elif manifest_governance_mode == "federated_thin_kernel":
+            forbidden_authorities = sorted(
+                authority
+                for authority in project["authorities"]
+                if is_federated_project_control_authority(authority)
+            )
+            if forbidden_authorities:
+                errors.append(
+                    f"{context}: federated project authorities cannot include control-plane authorities: {', '.join(forbidden_authorities)}"
+                )
         owner_task_id = project["owner_task_id"]
         if owner_task_id is not None and not is_non_empty_string(owner_task_id):
             errors.append(f"{context}: owner_task_id must be null or a non-empty string")
@@ -286,6 +402,11 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                 "topology.policy",
             )
         )
+        governance_mode = policy.get("governance_mode", "root_controller")
+        if not is_enum_value(governance_mode, GOVERNANCE_MODES):
+            errors.append(
+                "topology.policy: governance_mode must be root_controller or federated_thin_kernel"
+            )
         for field in (
             "max_active_turns",
             "baseline_max_active_turns",
@@ -429,9 +550,20 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         if not isinstance(lifecycle, dict):
             errors.append(f"{lifecycle_context}: must be an object")
         else:
+            topology_policy = topology.get("policy")
+            governance_mode = (
+                topology_policy.get("governance_mode", "root_controller")
+                if isinstance(topology_policy, dict)
+                else "root_controller"
+            )
+            controller_task_id_field = (
+                "controller_task_id"
+                if governance_mode == "federated_thin_kernel"
+                else "root_task_id"
+            )
             lifecycle_fields = [
                 "phase",
-                "root_task_id",
+                controller_task_id_field,
                 "safe_next_action",
                 "pending_wait_id",
                 "pending_owner_request_id",
@@ -449,8 +581,10 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             if all(field in lifecycle for field in lifecycle_fields):
                 if not is_enum_value(lifecycle["phase"], CONTROL_LIFECYCLE_PHASES):
                     errors.append(f"{lifecycle_context}: phase is invalid")
-                if not is_non_empty_string(lifecycle["root_task_id"]):
-                    errors.append(f"{lifecycle_context}: root_task_id must be non-empty")
+                if not is_non_empty_string(lifecycle[controller_task_id_field]):
+                    errors.append(
+                        f"{lifecycle_context}: {controller_task_id_field} must be non-empty"
+                    )
                 if not isinstance(lifecycle["safe_next_action"], bool):
                     errors.append(f"{lifecycle_context}: safe_next_action must be boolean")
                 for field in (
@@ -878,6 +1012,16 @@ def audit_topology(
         findings.append(item)
 
     policy = topology["policy"]
+    manifest_governance_mode = manifest["policy"].get(
+        "governance_mode", "root_controller"
+    )
+    topology_governance_mode = policy.get("governance_mode", "root_controller")
+    governance_mode = (
+        "federated_thin_kernel"
+        if "federated_thin_kernel"
+        in {manifest_governance_mode, topology_governance_mode}
+        else "root_controller"
+    )
     control_role_names = {
         definition["role"] for definition in policy["control_roles"]
     }
@@ -912,6 +1056,14 @@ def audit_topology(
     )
     context_pressure_counts: Counter[str] = Counter()
 
+    if manifest_governance_mode != topology_governance_mode:
+        finding(
+            "GOVERNANCE_MODE_MISMATCH",
+            "manifest and topology governance modes must match; audit fails closed to the stricter federated mode",
+            manifest_governance_mode=manifest_governance_mode,
+            topology_governance_mode=topology_governance_mode,
+            effective_governance_mode=governance_mode,
+        )
     if not topology["authoritative"]:
         finding(
             "NON_AUTHORITATIVE_TOPOLOGY",
@@ -976,8 +1128,153 @@ def audit_topology(
                     missing_authorities=missing,
                 )
 
+    if governance_mode == "federated_thin_kernel":
+        missing_control_roles = sorted(FEDERATED_CONTROL_ROLES - control_role_names)
+        unexpected_control_roles = sorted(control_role_names - FEDERATED_CONTROL_ROLES)
+        if missing_control_roles:
+            finding(
+                "FEDERATED_CONTROL_ROLE_MISSING",
+                "federated thin-kernel governance requires scheduler, runtime supervisor, and owner liaison roles",
+                missing_roles=missing_control_roles,
+            )
+        if unexpected_control_roles:
+            finding(
+                "FEDERATED_CONTROL_ROLE_NOT_ALLOWED",
+                "federated thin-kernel governance cannot add another persistent control role",
+                unexpected_roles=unexpected_control_roles,
+            )
+        if "root_controller" in control_role_names:
+            finding(
+                "FEDERATED_ROOT_CONTROL_ROLE_FORBIDDEN",
+                "federated thin-kernel governance cannot declare a persistent root control role",
+            )
+        if policy["migration_controller_role"] != "runtime_supervisor":
+            finding(
+                "FEDERATED_MIGRATION_CONTROLLER_ROLE_INVALID",
+                "federated thin-kernel governance reserves migration control for runtime_supervisor",
+                observed_role=policy["migration_controller_role"],
+            )
+        definitions_by_role = {
+            definition["role"]: definition
+            for definition in policy["control_roles"]
+            if definition["role"] in FEDERATED_CONTROL_ROLES
+        }
+        for role in sorted(FEDERATED_CONTROL_ROLES):
+            definition = definitions_by_role.get(role)
+            if definition is not None and (
+                not definition["required"] or definition["max_instances"] != 1
+            ):
+                finding(
+                    "FEDERATED_CONTROL_ROLE_POLICY_INVALID",
+                    "each thin-kernel role must be required with exactly one instance",
+                    role=role,
+                    required=definition["required"],
+                    max_instances=definition["max_instances"],
+                )
+            minimum_authorities = FEDERATED_CONTROL_ROLE_MINIMUM_AUTHORITIES[role]
+            if definition is not None:
+                missing_policy_minimum = sorted(
+                    minimum_authorities
+                    - set(definition["required_authorities"])
+                )
+                if missing_policy_minimum:
+                    finding(
+                        "FEDERATED_CONTROL_POLICY_AUTHORITY_MINIMUM_MISSING",
+                        "thin-kernel policy must declare each role's minimum authorities",
+                        role=role,
+                        missing_authorities=missing_policy_minimum,
+                    )
+            live_role_tasks = [
+                thread
+                for thread in threads
+                if thread["role"] == role
+                and thread["state"] in LIVE_CONTROL_STATES
+            ]
+            if len(live_role_tasks) != 1:
+                finding(
+                    "FEDERATED_LIVE_CONTROL_ROLE_COUNT_INVALID",
+                    "each thin-kernel role requires exactly one live task",
+                    role=role,
+                    live_task_ids=[
+                        thread["task_id"] for thread in live_role_tasks
+                    ],
+                    live_count=len(live_role_tasks),
+                )
+            for live_role_task in live_role_tasks:
+                missing_runtime_minimum = sorted(
+                    minimum_authorities
+                    - set(live_role_task["authorities"])
+                )
+                if missing_runtime_minimum:
+                    finding(
+                        "FEDERATED_CONTROL_RUNTIME_AUTHORITY_MINIMUM_MISSING",
+                        "a live thin-kernel task lacks its minimum operating authorities",
+                        role=role,
+                        task_id=live_role_task["task_id"],
+                        missing_authorities=missing_runtime_minimum,
+                    )
+        for control_thread in (
+            thread
+            for thread in threads
+            if thread["role"] in FEDERATED_CONTROL_ROLE_AUTHORITIES
+        ):
+            allowed_authorities = FEDERATED_CONTROL_ROLE_AUTHORITIES[
+                control_thread["role"]
+            ]
+            observed_authorities = set(control_thread["authorities"])
+            not_allowed = sorted(observed_authorities - allowed_authorities)
+            if not_allowed:
+                finding(
+                    "FEDERATED_SCHEDULER_AUTHORITY_ESCALATION"
+                    if control_thread["role"] == "scheduler"
+                    else "FEDERATED_CONTROL_AUTHORITY_ESCALATION",
+                    "a thin-kernel control role holds authority outside its role allowlist",
+                    task_id=control_thread["task_id"],
+                    role=control_thread["role"],
+                    not_allowed_authorities=not_allowed,
+                    explicitly_forbidden_authorities=sorted(
+                        observed_authorities
+                        & FEDERATED_SCHEDULER_FORBIDDEN_AUTHORITIES
+                    ),
+                )
+
     writer_counts: Counter[str] = Counter()
     for thread in threads:
+        if (
+            governance_mode == "federated_thin_kernel"
+            and thread["project_id"] is None
+            and thread["role"] not in FEDERATED_CONTROL_ROLES
+            and thread["state"] != "retired"
+        ):
+            finding(
+                "FEDERATED_NON_PROJECT_ROLE_NOT_ALLOWED",
+                "a live projectless task outside the three thin-kernel roles could recreate a hidden controller",
+                task_id=thread["task_id"],
+                role=thread["role"],
+                state=thread["state"],
+            )
+        if thread["role"] in control_role_names and (
+            thread["project_id"] is not None or thread["writer"]
+        ):
+            finding(
+                "CONTROL_PROJECT_EXECUTION_FORBIDDEN",
+                "a declared control role cannot attach to a project or hold a writer lease",
+                task_id=thread["task_id"],
+                role=thread["role"],
+                project_id=thread["project_id"],
+                writer=thread["writer"],
+            )
+        if (
+            governance_mode == "federated_thin_kernel"
+            and thread["role"] == "root_controller"
+            and thread["state"] != "retired"
+        ):
+            finding(
+                "FEDERATED_ROOT_CONTROLLER_FORBIDDEN",
+                "federated thin-kernel governance cannot retain a non-retired root controller",
+                task_id=thread["task_id"],
+                state=thread["state"],
+            )
         if thread["role"] == "root_controller" and (
             thread["project_id"] is not None or thread["writer"]
         ):
@@ -1070,6 +1367,40 @@ def audit_topology(
                 task_id=thread["task_id"],
                 project_id=project_id,
             )
+        elif (
+            project_id is not None
+            and governance_mode == "federated_thin_kernel"
+        ):
+            unexpected_authorities = sorted(
+                set(thread["authorities"])
+                - set(projects[project_id]["authorities"])
+            )
+            if unexpected_authorities:
+                finding(
+                    "PROJECT_AUTHORITY_OUTSIDE_MANIFEST",
+                    "project task authorities must remain inside the manifest authority envelope",
+                    task_id=thread["task_id"],
+                    project_id=project_id,
+                    unexpected_authorities=unexpected_authorities,
+                )
+            owner_task_id = projects[project_id]["owner_task_id"]
+            owner_only_authorities = sorted(
+                set(thread["authorities"])
+                & FEDERATED_PROJECT_OWNER_ONLY_AUTHORITIES
+            )
+            if (
+                governance_mode == "federated_thin_kernel"
+                and owner_only_authorities
+                and thread["task_id"] != owner_task_id
+            ):
+                finding(
+                    "PROJECT_OWNER_ONLY_AUTHORITY_HELD_BY_NON_OWNER",
+                    "project-local decision, admission, and fresh-round authorities belong only to the manifest owner task",
+                    task_id=thread["task_id"],
+                    project_id=project_id,
+                    manifest_owner_task_id=owner_task_id,
+                    owner_only_authorities=owner_only_authorities,
+                )
         context_health = thread.get("context_health")
         if context_health is None:
             continue
@@ -1401,6 +1732,29 @@ def audit_topology(
 
     for project_id, project in projects.items():
         owner_task_id = project["owner_task_id"]
+        federated_owner_required = (
+            governance_mode == "federated_thin_kernel"
+            and project["state"] not in {"frozen", "complete"}
+        )
+        if federated_owner_required:
+            missing_manifest_owner_authorities = sorted(
+                FEDERATED_PROJECT_OWNER_ONLY_AUTHORITIES
+                - set(project["authorities"])
+            )
+            if missing_manifest_owner_authorities:
+                finding(
+                    "FEDERATED_PROJECT_AUTHORITY_MINIMUM_MISSING",
+                    "an unfinished federated project manifest must grant its owner local decision, admission, and fresh-round authority",
+                    project_id=project_id,
+                    missing_authorities=missing_manifest_owner_authorities,
+                )
+            if owner_task_id is None:
+                finding(
+                    "FEDERATED_PROJECT_OWNER_REQUIRED",
+                    "an unfinished federated project requires one manifest owner task",
+                    project_id=project_id,
+                    project_state=project["state"],
+                )
         if owner_task_id is None:
             continue
         owner = tasks.get(owner_task_id)
@@ -1427,6 +1781,27 @@ def audit_topology(
                 project_id=project_id,
                 owner_task_id=owner_task_id,
             )
+        if owner["state"] not in LIVE_CONTROL_STATES:
+            finding(
+                "OWNER_TASK_NOT_LIVE",
+                "manifest owner task must be live to exercise project autonomy",
+                project_id=project_id,
+                owner_task_id=owner_task_id,
+                state=owner["state"],
+            )
+        if federated_owner_required:
+            missing_owner_authorities = sorted(
+                FEDERATED_PROJECT_OWNER_ONLY_AUTHORITIES
+                - set(owner["authorities"])
+            )
+            if missing_owner_authorities:
+                finding(
+                    "FEDERATED_PROJECT_OWNER_AUTHORITY_MINIMUM_MISSING",
+                    "the live federated project owner lacks local decision, admission, or fresh-round authority",
+                    project_id=project_id,
+                    owner_task_id=owner_task_id,
+                    missing_authorities=missing_owner_authorities,
+                )
         if owner["host_id"] != project["host_id"]:
             finding(
                 "OWNER_HOST_MISMATCH",
@@ -1471,6 +1846,16 @@ def audit_topology(
             expected_role=policy["migration_controller_role"],
             observed_role=controller["role"],
         )
+    elif (
+        governance_mode == "federated_thin_kernel"
+        and controller["state"] not in LIVE_CONTROL_STATES
+    ):
+        finding(
+            "FEDERATED_MIGRATION_CONTROLLER_NOT_LIVE",
+            "the federated migration controller must be a live runtime supervisor",
+            controller_task_id=migration["controller_task_id"],
+            state=controller["state"],
+        )
     target_task_id = migration["active_target_task_id"]
     if migration["lock_held"] and target_task_id is None:
         finding(
@@ -1493,7 +1878,21 @@ def audit_topology(
     lifecycle = topology.get("control_lifecycle")
     if lifecycle is not None:
         phase = lifecycle["phase"]
-        root = tasks.get(lifecycle["root_task_id"])
+        controller_task_id_field = (
+            "controller_task_id"
+            if topology_governance_mode == "federated_thin_kernel"
+            else "root_task_id"
+        )
+        expected_controller_role = (
+            "scheduler"
+            if topology_governance_mode == "federated_thin_kernel"
+            else "root_controller"
+        )
+        controller_task_id = lifecycle[controller_task_id_field]
+        control_task = tasks.get(controller_task_id)
+        controller_identity_evidence = {
+            controller_task_id_field: controller_task_id
+        }
         work_lease = lifecycle.get("work_lease")
         qualifying_work_evidence = False
         if isinstance(work_lease, dict):
@@ -1552,37 +1951,41 @@ def audit_topology(
             for project_id, project in projects.items()
             if project["state"] != "complete"
         ]
-        if root is None:
+        if control_task is None:
             finding(
-                "CONTROL_LIFECYCLE_ROOT_MISSING",
-                "control lifecycle root_task_id is absent from the topology",
-                root_task_id=lifecycle["root_task_id"],
+                "CONTROL_LIFECYCLE_CONTROLLER_MISSING"
+                if governance_mode == "federated_thin_kernel"
+                else "CONTROL_LIFECYCLE_ROOT_MISSING",
+                f"control lifecycle {controller_task_id_field} is absent from the topology",
+                **controller_identity_evidence,
             )
-        elif root["role"] != "root_controller":
+        elif control_task["role"] != expected_controller_role:
             finding(
-                "CONTROL_LIFECYCLE_ROOT_ROLE_MISMATCH",
-                "control lifecycle must reference the root controller",
-                root_task_id=lifecycle["root_task_id"],
-                observed_role=root["role"],
+                "CONTROL_LIFECYCLE_CONTROLLER_ROLE_MISMATCH"
+                if governance_mode == "federated_thin_kernel"
+                else "CONTROL_LIFECYCLE_ROOT_ROLE_MISMATCH",
+                f"control lifecycle must reference the {expected_controller_role}",
+                **controller_identity_evidence,
+                observed_role=control_task["role"],
             )
         if phase == "running" and not lifecycle["safe_next_action"]:
             finding(
                 "RUNNING_WITHOUT_SAFE_NEXT_ACTION",
                 "running control state requires one safe next action",
-                root_task_id=lifecycle["root_task_id"],
+                **controller_identity_evidence,
             )
         if phase == "running" and work_lease is None:
             finding(
                 "RUNNING_WITHOUT_WORK_LEASE",
                 "running control state requires an evidence-backed work lease",
-                root_task_id=lifecycle["root_task_id"],
+                **controller_identity_evidence,
             )
         if phase == "running" and work_lease is not None:
             if not qualifying_work_evidence:
                 finding(
                     "RUNNING_WITHOUT_WORK_EVIDENCE",
                     "running control state must admit, dispatch, advance evidence, or terminate one action",
-                    root_task_id=lifecycle["root_task_id"],
+                    **controller_identity_evidence,
                     action_id=work_lease["action_id"],
                 )
             if work_lease["action_terminal"]:
@@ -1607,7 +2010,7 @@ def audit_topology(
             finding(
                 "WAITING_WITHOUT_PENDING_EVENT",
                 "waiting control state requires an identified wait or owner request",
-                root_task_id=lifecycle["root_task_id"],
+                **controller_identity_evidence,
             )
         if (
             phase == "waiting"
@@ -1704,6 +2107,9 @@ def audit_topology(
         "schema_version": TOPOLOGY_AUDIT_SCHEMA,
         "ok": not findings,
         "portfolio_id": manifest["portfolio_id"],
+        "governance_mode": governance_mode,
+        "manifest_governance_mode": manifest_governance_mode,
+        "topology_governance_mode": topology_governance_mode,
         "observed_at_utc": topology["observed_at_utc"],
         "thread_count": len(threads),
         "active_turn_count": len(active_threads),

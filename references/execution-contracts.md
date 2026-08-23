@@ -37,7 +37,8 @@ dispatch. Project-controlled helpers may perform bounded read-only diagnosis or
 evidence aggregation, but the existing project task retains the only writer lease and
 all repository mutation.
 
-Do not interrupt Root or the user for ordinary path, harness, parser, missing-tool, or
+Do not interrupt a portfolio controller or the user for ordinary path, harness,
+parser, missing-tool, or
 mechanically decidable failures. The first formal/native nonzero ends that round and
 later gates are `UNEXECUTED`; it does not end the project objective. The coordinator
 uses retained evidence to derive one materially different action ID and fresh
@@ -149,14 +150,29 @@ Set `authoritative` only from executor-owned runtime evidence. When
 
 Control-plane threads should exchange compact state, not act as parallel project
 writers. Project tasks report evidence deltas to runtime supervision; scheduling
-uses that snapshot to propose admissions; root decides only portfolio-level matters;
-owner liaison carries the minimal human action request.
+uses that snapshot only to propose ordering, dependency, and capacity improvements;
+the owner liaison carries the minimal human action request.
 
-Root contracts stop at admission, authority, priority, stop conditions, and summary.
-Every implementation, test, build, fix, or delivery contract targets the existing
-project task that owns the admitted host/root/candidate and writer lease. If that
-task is unavailable or identity cannot be proved, stop and route the blocker; never
-move execution into Root or a Root-controlled nested worker.
+In `federated_thin_kernel` mode, the existing project owner selects, admits, recovers,
+and closes project-local rounds inside its explicit manifest authority envelope.
+There is no persistent root and the scheduler cannot expand that envelope. Authority
+expansion, cross-project conflicts, and owner-only actions go through the liaison for
+an exact user decision. Manifest and topology modes must match; any mismatch fails
+closed to federated enforcement. A declared control role cannot attach to a project
+or hold its writer lease. Federated mode requires exactly one live scheduler, runtime
+supervisor, and owner liaison, each bounded by a minimum capability set and maximum
+allowlist; runtime supervision is the sole migration-controller role. Project
+envelopes cannot contain control-plane authority, and owner-only local governance
+authorities cannot be delegated to a scoped executor. Every unfinished, non-frozen
+project requires one live writer owner plus the three local-governance authorities
+in both manifest and owner task. This authority-subset hard gate is federated-only;
+legacy `root_controller` mode retains its previous compatibility behavior. In legacy
+`root_controller` mode, Root contracts stop at
+portfolio admission, authority, priority, stop conditions, and summary. In both
+modes, every implementation, test, build, fix, or delivery contract targets the
+existing project task that owns the admitted host/root/candidate and writer lease.
+If that task is unavailable or identity cannot be proved, stop and route the blocker;
+never move execution into a control task or controller-owned nested worker.
 
 ## Stuck-thread recovery contract
 
@@ -269,7 +285,7 @@ the still-valid evidence and explains why the result cannot change the decision.
 At the first nonzero, stop immediately and mark later steps `UNEXECUTED`. Unknown
 task/host/branch identity, foreign or unowned dirty paths, and merge conflicts are
 stop conditions. Do not change entry points, force push, force merge, discard retained
-state, or let Root complete the chain. A successful closeout records the commit SHA,
+  state, or let a control task complete the chain. A successful closeout records the commit SHA,
 remote SHA readback, and target-branch merge SHA; only then may the stage be reported
 complete and its writer lease released.
 
