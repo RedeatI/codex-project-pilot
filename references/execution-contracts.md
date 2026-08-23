@@ -49,6 +49,27 @@ derivable from authority, destructive/high-impact work, host migration,
 security/architecture direction, publication or release beyond current authority, or
 authoritative proof that no safe next action exists.
 
+## Routine public network envelope
+
+`PROJECT_TASK_CONTRACT_V2_4` permits a project owner to use routine public networking
+only when its manifest explicitly grants `routine_public_network`. This authority is
+project-local and covers public dependency fetches, public documentation lookup,
+read-only public APIs, build-resource fetches, and network diagnostics needed by the
+already authorized stage. Before each such action, record one compact envelope with
+the purpose, exact domains or URLs, exact write locations, credential boundary,
+frequency, expected evidence, and stop condition. The credential boundary is `none`
+for this authority; redirects or discovered resources outside the recorded scope
+require a fresh envelope or the applicable owner gate.
+
+Routine public networking does not authorize credentials or private data, production
+or real-user impact, destructive operations, external publication or deployment,
+cross-host migration, material scope or dependency expansion, irreversible external
+writes, or major architecture direction. Those remain exact owner decisions. The
+authority also does not relax host/root identity, frozen task settings, writer and
+migration locks, first-nonzero semantics, secret checks, or publication readback.
+Projects without the explicit authority record network work as `UNEXECUTED` and route
+only the smallest needed authority request.
+
 ## Admission
 
 Create a plan and runtime readback before risky work. The bundled `admit` command

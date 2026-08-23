@@ -114,7 +114,7 @@ host identity, or evidence boundaries.
    readback. Include exact task, host, root, branches, owned paths, authorities,
    preserved state, explicit stopping conditions, `NOT_REQUIRED` evidence, and final
    readback. Prefer this complete stage contract to serial half-step prompts. Use
-   `PROJECT_TASK_CONTRACT_V2_3`; do not interpret permission to continue as deploy,
+   `PROJECT_TASK_CONTRACT_V2_4`; do not interpret permission to continue as deploy,
    release, credential, production-data, or destructive authority.
    Project writers may use project-controlled non-writing helpers for bounded
    diagnosis or evidence aggregation, but helpers cannot acquire a second writer
@@ -123,6 +123,19 @@ host identity, or evidence boundaries.
    ends the current formal round; the coordinator derives one materially different
    fresh round from retained evidence instead of abandoning the project or escalating
    routine failures.
+   When a project's manifest and action contract both explicitly grant
+   `routine_public_network`, its owner may autonomously retrieve public dependencies,
+   consult public documentation, call read-only public APIs, fetch build resources,
+   and run network diagnostics inside the existing project scope. Record one minimum
+   envelope naming purpose, exact domains or URLs, write locations, no-credential
+   boundary, frequency, expected evidence, and stop condition. Credentials or private
+   data, production or real-user impact, destructive operations, publication or
+   deployment, cross-host migration, material scope/dependency expansion,
+   irreversible external writes, and major architecture direction remain owner gates.
+   Routine network authority never relaxes host/root identity, frozen settings,
+   writer or migration locks, first-nonzero behavior, secret checks, or publication
+   controls. Older manifests remain valid but have no routine network authority unless
+   they adopt the V2.4 policy and grant it per project.
    Default to delivery-first staging: finish core functionality, integration, and
    acceptance evidence before non-blocking deep security research. Record deferred
    research as an explicit pre-release gate. Never defer known critical/high defects,

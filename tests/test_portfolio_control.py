@@ -51,6 +51,46 @@ def valid_manifest():
     }
 
 
+def enable_v24_routine_public_network(manifest):
+    manifest["policy"]["project_owner_autonomy"] = {
+        "contract_version": "PROJECT_TASK_CONTRACT_V2_4",
+        "routine_public_network": {
+            "authority": "routine_public_network",
+            "allowed_categories": [
+                "public_dependency_fetch",
+                "public_documentation_lookup",
+                "read_only_public_api",
+                "build_resource_fetch",
+                "network_diagnostic",
+            ],
+            "minimum_envelope_fields": [
+                "purpose",
+                "domains_or_urls",
+                "write_locations",
+                "credential_boundary",
+                "frequency",
+                "expected_evidence",
+                "stop_condition",
+            ],
+            "credentials_allowed": False,
+        },
+        "owner_gate_categories": [
+            "credential_or_private_data",
+            "production_or_real_user_impact",
+            "destructive_operation",
+            "external_publication_or_deployment",
+            "cross_host_migration",
+            "material_scope_or_dependency_expansion",
+            "irreversible_external_write",
+            "major_architecture_direction",
+        ],
+        "first_nonzero_stops_round": True,
+        "fresh_round_requires_material_difference": True,
+    }
+    manifest["projects"][0]["authorities"].append("routine_public_network")
+    return manifest
+
+
 def valid_topology():
     root = str(Path.cwd())
     return {
@@ -263,6 +303,47 @@ def valid_stage_closeout():
 class PortfolioControlTests(unittest.TestCase):
     def test_manifest_validation(self):
         self.assertEqual(CONTROL.validate_manifest(valid_manifest()), [])
+
+    def test_manifest_validation_accepts_v24_routine_public_network(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_validation_keeps_legacy_manifest_compatible(self):
+        manifest = valid_manifest()
+        self.assertNotIn("project_owner_autonomy", manifest["policy"])
+        self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_rejects_network_authority_without_v24_policy(self):
+        manifest = valid_manifest()
+        manifest["projects"][0]["authorities"].append("routine_public_network")
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertTrue(
+            any(
+                "routine_public_network requires policy.project_owner_autonomy PROJECT_TASK_CONTRACT_V2_4"
+                in error
+                for error in errors
+            )
+        )
+
+    def test_manifest_rejects_v24_policy_that_allows_credentials(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"]["routine_public_network"][
+            "credentials_allowed"
+        ] = True
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy.routine_public_network: credentials_allowed must be false",
+            errors,
+        )
+
+    def test_manifest_rejects_v24_policy_with_missing_owner_gate(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"]["owner_gate_categories"].pop()
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy: owner_gate_categories must list the exact V2_4 owner gates",
+            errors,
+        )
 
     def test_federated_manifest_rejects_project_control_plane_authority(self):
         manifest = valid_manifest()

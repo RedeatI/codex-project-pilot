@@ -50,11 +50,22 @@ the coordinator derives a materially different fresh round without escalating ro
 mechanical failures. Unknown identity, foreign dirty paths, conflicts, or a first
 nonzero stop the remaining gates; force push and force merge are outside the contract.
 
-The `PROJECT_TASK_CONTRACT_V2_3` prompt adds a validation-value gate: before any check,
+The `PROJECT_TASK_CONTRACT_V2_4` prompt adds a validation-value gate: before any check,
 name the blocker it removes or decision it changes and the new evidence expected.
 Skip repeated or decision-irrelevant checks while preserving required safety,
 authority, publication, merge, and release evidence. It also makes Sol-specific risk
 claims traceable instead of treating community anecdotes as facts.
+
+V2.4 also makes routine public networking an explicit project-local authority rather
+than a blanket portfolio permission. A granted project may fetch public dependencies
+and build resources, consult public documentation, use read-only public APIs, and run
+network diagnostics with a compact purpose/domain/write-location/no-credential/
+frequency/evidence/stop envelope. Credentials or private data, production or real-user
+effects, destructive or irreversible writes, external publication/deployment,
+cross-host migration, material scope or dependency expansion, and major architecture
+direction remain owner gates. Older manifests remain valid; they gain no network
+authority until they adopt the V2.4 policy and grant `routine_public_network` to the
+specific project.
 
 Delivery-first staging prioritizes core implementation, integration, and acceptance
 candidates. Non-blocking deep security research may be deferred into one explicit

@@ -64,6 +64,34 @@ STAGE_CLOSEOUT_STEPS = (
 )
 CAPACITY_CLASSES = {"baseline", "surge"}
 GOVERNANCE_MODES = {"root_controller", "federated_thin_kernel"}
+PROJECT_TASK_CONTRACT_V2_4 = "PROJECT_TASK_CONTRACT_V2_4"
+ROUTINE_PUBLIC_NETWORK_AUTHORITY = "routine_public_network"
+ROUTINE_PUBLIC_NETWORK_CATEGORIES = {
+    "public_dependency_fetch",
+    "public_documentation_lookup",
+    "read_only_public_api",
+    "build_resource_fetch",
+    "network_diagnostic",
+}
+ROUTINE_PUBLIC_NETWORK_ENVELOPE_FIELDS = {
+    "purpose",
+    "domains_or_urls",
+    "write_locations",
+    "credential_boundary",
+    "frequency",
+    "expected_evidence",
+    "stop_condition",
+}
+PROJECT_OWNER_GATE_CATEGORIES = {
+    "credential_or_private_data",
+    "production_or_real_user_impact",
+    "destructive_operation",
+    "external_publication_or_deployment",
+    "cross_host_migration",
+    "material_scope_or_dependency_expansion",
+    "irreversible_external_write",
+    "major_architecture_direction",
+}
 FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES = {
     "control_read",
     "manifest_read",
@@ -229,6 +257,83 @@ def effective_max_active_turns(policy: dict[str, Any]) -> int:
     return configured if runtime_reported is None else min(configured, runtime_reported)
 
 
+def validate_project_owner_autonomy(value: Any) -> list[str]:
+    context = "policy.project_owner_autonomy"
+    if not isinstance(value, dict):
+        return [f"{context}: must be an object"]
+    errors = require_fields(
+        value,
+        [
+            "contract_version",
+            "routine_public_network",
+            "owner_gate_categories",
+            "first_nonzero_stops_round",
+            "fresh_round_requires_material_difference",
+        ],
+        context,
+    )
+    if errors:
+        return errors
+    if value["contract_version"] != PROJECT_TASK_CONTRACT_V2_4:
+        errors.append(
+            f"{context}: contract_version must be {PROJECT_TASK_CONTRACT_V2_4}"
+        )
+    network = value["routine_public_network"]
+    network_context = f"{context}.routine_public_network"
+    if not isinstance(network, dict):
+        errors.append(f"{network_context}: must be an object")
+    else:
+        errors.extend(
+            require_fields(
+                network,
+                [
+                    "authority",
+                    "allowed_categories",
+                    "minimum_envelope_fields",
+                    "credentials_allowed",
+                ],
+                network_context,
+            )
+        )
+        if network.get("authority") != ROUTINE_PUBLIC_NETWORK_AUTHORITY:
+            errors.append(
+                f"{network_context}: authority must be {ROUTINE_PUBLIC_NETWORK_AUTHORITY}"
+            )
+        allowed_categories = network.get("allowed_categories")
+        if (
+            not is_string_list(allowed_categories)
+            or set(allowed_categories) != ROUTINE_PUBLIC_NETWORK_CATEGORIES
+        ):
+            errors.append(
+                f"{network_context}: allowed_categories must list the exact V2_4 routine public network categories"
+            )
+        minimum_envelope_fields = network.get("minimum_envelope_fields")
+        if (
+            not is_string_list(minimum_envelope_fields)
+            or set(minimum_envelope_fields) != ROUTINE_PUBLIC_NETWORK_ENVELOPE_FIELDS
+        ):
+            errors.append(
+                f"{network_context}: minimum_envelope_fields must list the exact V2_4 envelope"
+            )
+        if network.get("credentials_allowed") is not False:
+            errors.append(f"{network_context}: credentials_allowed must be false")
+    owner_gate_categories = value["owner_gate_categories"]
+    if (
+        not is_string_list(owner_gate_categories)
+        or set(owner_gate_categories) != PROJECT_OWNER_GATE_CATEGORIES
+    ):
+        errors.append(
+            f"{context}: owner_gate_categories must list the exact V2_4 owner gates"
+        )
+    if value["first_nonzero_stops_round"] is not True:
+        errors.append(f"{context}: first_nonzero_stops_round must be true")
+    if value["fresh_round_requires_material_difference"] is not True:
+        errors.append(
+            f"{context}: fresh_round_requires_material_difference must be true"
+        )
+    return errors
+
+
 def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     errors = require_fields(
         manifest,
@@ -244,6 +349,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             errors.append(f"manifest: {field} must be a non-empty string")
     policy = manifest["policy"]
     manifest_governance_mode = "root_controller"
+    project_owner_autonomy_present = False
     if not isinstance(policy, dict):
         errors.append("manifest: policy must be an object")
     else:
@@ -277,6 +383,11 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         if not is_enum_value(manifest_governance_mode, GOVERNANCE_MODES):
             errors.append(
                 "policy: governance_mode must be root_controller or federated_thin_kernel"
+            )
+        project_owner_autonomy_present = "project_owner_autonomy" in policy
+        if project_owner_autonomy_present:
+            errors.extend(
+                validate_project_owner_autonomy(policy["project_owner_autonomy"])
             )
     projects = manifest["projects"]
     if not isinstance(projects, list) or not projects:
@@ -329,6 +440,14 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"{context}: federated project authorities cannot include control-plane authorities: {', '.join(forbidden_authorities)}"
                 )
+        if (
+            is_string_list(project["authorities"])
+            and ROUTINE_PUBLIC_NETWORK_AUTHORITY in project["authorities"]
+            and not project_owner_autonomy_present
+        ):
+            errors.append(
+                f"{context}: {ROUTINE_PUBLIC_NETWORK_AUTHORITY} requires policy.project_owner_autonomy {PROJECT_TASK_CONTRACT_V2_4}"
+            )
         owner_task_id = project["owner_task_id"]
         if owner_task_id is not None and not is_non_empty_string(owner_task_id):
             errors.append(f"{context}: owner_task_id must be null or a non-empty string")

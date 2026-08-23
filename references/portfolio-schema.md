@@ -15,7 +15,42 @@ or production data in it.
     "governance_mode": "federated_thin_kernel",
     "max_parallel_projects": 3,
     "default_repo_visibility": "private",
-    "external_mutations_require_user_authorization": true
+    "external_mutations_require_user_authorization": true,
+    "project_owner_autonomy": {
+      "contract_version": "PROJECT_TASK_CONTRACT_V2_4",
+      "routine_public_network": {
+        "authority": "routine_public_network",
+        "allowed_categories": [
+          "public_dependency_fetch",
+          "public_documentation_lookup",
+          "read_only_public_api",
+          "build_resource_fetch",
+          "network_diagnostic"
+        ],
+        "minimum_envelope_fields": [
+          "purpose",
+          "domains_or_urls",
+          "write_locations",
+          "credential_boundary",
+          "frequency",
+          "expected_evidence",
+          "stop_condition"
+        ],
+        "credentials_allowed": false
+      },
+      "owner_gate_categories": [
+        "credential_or_private_data",
+        "production_or_real_user_impact",
+        "destructive_operation",
+        "external_publication_or_deployment",
+        "cross_host_migration",
+        "material_scope_or_dependency_expansion",
+        "irreversible_external_write",
+        "major_architecture_direction"
+      ],
+      "first_nonzero_stops_round": true,
+      "fresh_round_requires_material_difference": true
+    }
   },
   "projects": [
     {
@@ -56,6 +91,20 @@ or production data in it.
 - `state` is one of `frozen`, `ready`, `active`, `waiting`, `blocked`, or
   `complete`.
 - Authorities are explicit strings. Absence means no authority.
+- `project_owner_autonomy` is optional so manifests written before V2.4 remain
+  valid. A project that uses routine public networking must explicitly include
+  `routine_public_network` in its own `authorities`; that grant is invalid unless
+  the policy contains the exact `PROJECT_TASK_CONTRACT_V2_4` block shown above.
+  Each network action also records the minimum envelope fields. The portfolio-level
+  policy never grants the authority to every project implicitly.
+- Routine public networking is limited to public dependency retrieval, public
+  documentation lookup, read-only public APIs, build-resource retrieval, and network
+  diagnosis inside the project's existing scope. Its envelope names purpose, exact
+  domains or URLs, write locations, the no-credential boundary, frequency, expected
+  evidence, and stop condition. Credentials or private data, production or real-user
+  impact, destructive operations, publication/deployment, cross-host migration,
+  material scope or dependency expansion, irreversible external writes, and major
+  architecture direction remain owner gates.
 - In federated mode, grant each owner only its project-local envelope, such as
   `project_local_decide`, `project_local_admission`, `project_execute`, and the
   exact repository/test/delivery authorities it needs. These never imply external
@@ -77,6 +126,12 @@ Update state from evidence. Do not mark a project complete because its task says
 is complete; record the evidence that proves the desired outcome.
 
 Run `validate-manifest` after every manifest edit.
+
+A first formal/native nonzero still stops the current round. It does not revoke the
+project objective or its V2.4 autonomy: the same project owner may derive a fresh
+round only when the new action is materially different and retained evidence is
+preserved. Host, root, writer, frozen-lane, migration, publication, and credential
+gates are unchanged.
 
 ## Thread identity boundary
 

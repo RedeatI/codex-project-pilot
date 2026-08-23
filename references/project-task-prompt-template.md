@@ -1,6 +1,6 @@
 # Project task prompt contract
 
-Contract version: `PROJECT_TASK_CONTRACT_V2_3`
+Contract version: `PROJECT_TASK_CONTRACT_V2_4`
 Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
 
 Use this compact contract for a project implementation task. In federated mode the
@@ -9,7 +9,7 @@ envelope. In legacy root mode, Root uses a separate control-only contract and mu
 not execute these project steps.
 
 ```text
-PROJECT_TASK_CONTRACT_V2_3
+PROJECT_TASK_CONTRACT_V2_4
 PROJECT=<stable project id>
 ACTION_ID=<fresh exact action id>
 PROJECT_TASK_ID=<existing independent task id>
@@ -30,6 +30,8 @@ DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SEC
 EXCLUSIONS=<explicitly forbidden work and external effects>
 EXPECTED_READBACK=<exact artifacts, commands, SHAs, or runtime fields>
 MIGRATION_STATE=NOT_REQUIRED|RECOMMENDED|HANDOFF_ONLY|ACCEPTED
+ROUTINE_PUBLIC_NETWORK=NOT_REQUIRED|AUTHORIZED
+ROUTINE_NETWORK_ENVELOPE=<purpose; exact domains/URLs; exact write locations; credential boundary; frequency; expected evidence; stop condition>
 
 ROLE_BOUNDARY
 - In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
@@ -59,6 +61,21 @@ FACT_AND_AUTHORITY_BOUNDARY
   production data.
 - "Continue" does not authorize deploy, release, production mutation, publication,
   credential use, or destructive cleanup. Security-sensitive ambiguity fails closed.
+
+ROUTINE_PUBLIC_NETWORK_BOUNDARY
+- `ROUTINE_PUBLIC_NETWORK=AUTHORIZED` is valid only when `AUTHORITIES` and the live
+  project manifest both explicitly list `routine_public_network`. Portfolio policy
+  alone never grants it. Otherwise mark the network action `UNEXECUTED`.
+- The exact envelope is mandatory for public dependency retrieval, public
+  documentation lookup, read-only public APIs, build-resource retrieval, and network
+  diagnostics. Use no credentials, stay inside the existing project/stage/dependency
+  scope, write only to listed locations, and retain HTTP/source/hash or diagnostic
+  evidence appropriate to the action.
+- Credentials or private data, production or real-user impact, destructive actions,
+  external publication/deployment, cross-host migration, material scope or dependency
+  expansion, irreversible external writes, and major architecture direction remain
+  owner gates. Routine public network authority cannot waive host/root, frozen task,
+  writer, migration, first-nonzero, secret, or publication gates.
 
 ACTION_SELECTION
 - When task, host, root, writer, inputs, and authority are complete, choose one
