@@ -27,12 +27,16 @@ consume surge slots.
 Root remains a control-only role: project mutation and verification run in the
 project's independent task, with one writer lease and compact evidence or major
 decision requests returned to Root.
-Each completed stage closes in that same project task through evidence, test, build,
-diff, and readback gates followed by commit, push, worktree merge when required, and
-target-branch readback. Unknown identity, foreign dirty paths, conflicts, or a first
-nonzero stop the remaining steps; force push and force merge are outside the contract.
+Each stage is preferably dispatched as one complete contract covering preflight,
+implementation or diagnosis, decision-changing tests/build, diff/readback, commit,
+non-force push, fast-forward merge, and target readback. Project-controlled
+non-writing helpers may diagnose routine harness or evidence issues, while the project
+task retains the only writer. A first nonzero stops that round, not the project goal;
+the coordinator derives a materially different fresh round without escalating routine
+mechanical failures. Unknown identity, foreign dirty paths, conflicts, or a first
+nonzero stop the remaining gates; force push and force merge are outside the contract.
 
-The `PROJECT_TASK_CONTRACT_V2` prompt adds a validation-value gate: before any check,
+The `PROJECT_TASK_CONTRACT_V2_3` prompt adds a validation-value gate: before any check,
 name the blocker it removes or decision it changes and the new evidence expected.
 Skip repeated or decision-irrelevant checks while preserving required safety,
 authority, publication, merge, and release evidence. It also makes Sol-specific risk

@@ -10,6 +10,7 @@ A useful long contract identifies:
 - project and action IDs;
 - actual host, canonical root, and selected execution surface;
 - role, ownership, and granted authorities;
+- the authorized stage boundary, source and target branches, and exact owned paths;
 - desired outcome and explicit exclusions;
 - input or candidate identity and retained evidence;
 - ordered preflight, mutation, verification, and conditional branches;
@@ -18,6 +19,34 @@ A useful long contract identifies:
 
 Do not copy a full transcript. A continuation handoff should retain only current
 state and one unambiguous next action.
+
+## Long-stage efficiency and internal recovery
+
+When task, host, root, writer, inputs, and authority are already known, dispatch one
+complete stage contract instead of separate preflight, implementation, test, build,
+and closeout prompts. The contract may span `preflight -> implementation/diagnosis ->
+focused tests -> decision-changing full tests/build -> diff/scope/secret -> readback ->
+commit -> non-force push -> fast-forward merge -> remote/target readback`. A long
+contract does not expand authority: any unauthorized gate remains `UNEXECUTED`, and
+deploy, release, credentials, production data, destructive cleanup, or an alternate
+target require their own exact authority.
+
+State exact owned paths, branches, retained and foreign state, stop conditions, the
+evidence that permits any `NOT_REQUIRED` gate, and the terminal readback before
+dispatch. Project-controlled helpers may perform bounded read-only diagnosis or
+evidence aggregation, but the existing project task retains the only writer lease and
+all repository mutation.
+
+Do not interrupt Root or the user for ordinary path, harness, parser, missing-tool, or
+mechanically decidable failures. The first formal/native nonzero ends that round and
+later gates are `UNEXECUTED`; it does not end the project objective. The coordinator
+uses retained evidence to derive one materially different action ID and fresh
+admission, then resumes the same writer unless authoritative evidence proves it is
+stuck. Send compact batched dispatch and terminal deltas. Escalate only genuine login,
+desktop or session recovery, credentials, external ownership or branch choices not
+derivable from authority, destructive/high-impact work, host migration,
+security/architecture direction, publication or release beyond current authority, or
+authoritative proof that no safe next action exists.
 
 ## Admission
 
@@ -104,7 +133,9 @@ Set `authoritative` only from executor-owned runtime evidence. When
   stop requires the same closure handshake and user-visible success notifications.
   A delivery failure forbids pausing; a later poll needs a fresh, bounded admission.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,
-  and mechanically decidable outcomes should remain terminal task records.
+  and mechanically decidable outcomes remain terminal task records and feed the next
+  materially different internal recovery round; do not emit half-step Root/user
+  reports, empty heartbeats, unchanged queue reminders, or repeated readbacks.
 - If fresh evidence proves progress needs user judgment, a choice, login, desktop
   action, host migration, or another owner-only action, send one timely packet
   through the owner liaison. Name the exact blocker, why current authority cannot
@@ -225,12 +256,15 @@ the configured number is reachable.
 
 ## Stage closeout contract
 
-After a project stage reaches its intended evidence state, its project task runs one
-formal closeout chain: `evidence -> focused test -> build -> diff/scope/secret check
--> readback -> commit -> non-force push -> fast-forward merge -> remote/merge
-readback`. Declare the exact project task, host, source branch, target branch, owned
-diff, writer lease, and whether a worktree merge is required before mutation. Any
-gate may be `NOT_REQUIRED` only when the project contract proves why.
+When the necessary authorities are complete, include closeout in the original stage
+contract rather than waiting for a separate series of half-step prompts. The project
+task runs one formal chain: `preflight -> implementation/diagnosis -> evidence ->
+focused test -> decision-changing full test/build -> diff/scope/secret check ->
+readback -> commit -> non-force push -> fast-forward merge -> remote/merge readback`.
+Declare the exact project task, host, root, source branch, target branch, owned paths,
+writer lease, preserved foreign/retained state, and whether a worktree merge is
+required before mutation. Any gate may be `NOT_REQUIRED` only when the contract names
+the still-valid evidence and explains why the result cannot change the decision.
 
 At the first nonzero, stop immediately and mark later steps `UNEXECUTED`. Unknown
 task/host/branch identity, foreign or unowned dirty paths, and merge conflicts are

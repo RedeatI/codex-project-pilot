@@ -16,8 +16,10 @@ host identity, or evidence boundaries.
    tasks, authorities, desired outcomes, and current states. When tasks are being
    added, resumed, migrated, or rebalanced, also maintain an authoritative thread
    topology snapshot.
-3. Select the smallest set of independent next actions that materially advances the
-   portfolio. Separate control-plane roles from project writers, keep one writer
+3. Select the smallest set of independent, stage-complete next actions that
+   materially advances the portfolio. Prefer one complete project contract over a
+   sequence of half-step contracts when host, authority, input, and writer identity
+   are already known. Separate control-plane roles from project writers, keep one writer
    lease per project, count nested workers as execution units, reserve control-plane
    capacity before calculating a new-dispatch budget, and serialize migrations or
    shared-state changes. A worker hidden inside an active Root turn still consumes
@@ -87,10 +89,21 @@ host identity, or evidence boundaries.
    inspection. Treat model claims, plans, queues, static checks, local output, and
    historical output as non-authoritative for remote, GitHub, merge, deployment, or
    release state.
-5. Dispatch long contracts that cover safe preflight through verification. Include
-   explicit stopping conditions and require final readback rather than frequent
-   status chatter. Use `PROJECT_TASK_CONTRACT_V2_2`; do not interpret permission to
-   continue as deploy, release, credential, production-data, or destructive authority.
+5. Dispatch long contracts that cover the authorized stage from preflight through
+   implementation or diagnosis, decision-changing tests and build, diff/scope/secret
+   checks, readback, commit, non-force push, fast-forward merge, and remote/target
+   readback. Include exact task, host, root, branches, owned paths, authorities,
+   preserved state, explicit stopping conditions, `NOT_REQUIRED` evidence, and final
+   readback. Prefer this complete stage contract to serial half-step prompts. Use
+   `PROJECT_TASK_CONTRACT_V2_3`; do not interpret permission to continue as deploy,
+   release, credential, production-data, or destructive authority.
+   Project writers may use project-controlled non-writing helpers for bounded
+   diagnosis or evidence aggregation, but helpers cannot acquire a second writer
+   lease or mutate the repository. Authorized mechanical, path, harness, and evidence
+   issues stay inside the project/coordinator recovery loop. A first nonzero still
+   ends the current formal round; the coordinator derives one materially different
+   fresh round from retained evidence instead of abandoning the project or escalating
+   routine failures.
    Default to delivery-first staging: finish core functionality, integration, and
    acceptance evidence before non-blocking deep security research. Record deferred
    research as an explicit pre-release gate. Never defer known critical/high defects,
@@ -98,7 +111,16 @@ host identity, or evidence boundaries.
    risks, necessary dependency/supply-chain checks, or publication controls.
 6. Monitor deltas, not full transcripts. Classify approval, missing authority,
    host mismatch, harness failure, product failure, and external-state waiting as
-   different outcomes. Deduplicate context-renewal notifications by target and
+   different outcomes. Project idle, a completed turn, or a first-nonzero terminal
+   ends only that round, not the project objective. Promptly derive the next safe
+   authorized action; use `WAITING` or `BLOCKED` only after authoritative proof that
+   no safe action exists or a named external/manual event is required. Suppress
+   half-step reports, unchanged status, queue reminders, and routine mechanical
+   failures; send compact batched dispatch/terminal deltas instead. Escalate only
+   genuine owner login/desktop/session work, credentials, external ownership choices,
+   destructive or high-impact action, host migration, security/architecture direction,
+   publication/release beyond current authority, or proven absence of a safe next
+   action. Deduplicate context-renewal notifications by target and
    notification ID. Treat runtime idle as turn completion, not portfolio completion.
    Require each active `running` monitor to renew an evidence-backed work lease by
    admitting, dispatching, advancing ledger evidence, or recording a terminal result.

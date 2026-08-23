@@ -1,13 +1,13 @@
 # Project task prompt contract
 
-Contract version: `PROJECT_TASK_CONTRACT_V2_2`
+Contract version: `PROJECT_TASK_CONTRACT_V2_3`
 Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
 
 Use this compact contract for a project implementation task. Root uses a separate
 control-only contract and must not execute these project steps.
 
 ```text
-PROJECT_TASK_CONTRACT_V2_2
+PROJECT_TASK_CONTRACT_V2_3
 PROJECT=<stable project id>
 ACTION_ID=<fresh exact action id>
 PROJECT_TASK_ID=<existing independent task id>
@@ -15,10 +15,13 @@ HOST=<exact host scope and host id>
 ROOT=<exact canonical project root>
 SOURCE_BRANCH=<exact source branch>
 TARGET_BRANCH=<exact target branch>
+STAGE_BOUNDARY=<authorized end state for this contract>
+OWNED_PATHS=<exact paths or exact generated-artifact boundary>
 WRITER_LEASE=<project id + holder task id + evidence id>
 AUTHORITIES=<exact granted authorities>
 INPUTS=<complete candidate/input identities and retained evidence ids>
-OUTCOME=<smallest independently state-changing result>
+PRESERVED_STATE=<foreign dirty paths, retained candidates, evidence, and worktrees>
+OUTCOME=<smallest complete independently state-changing stage>
 DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SECURITY
 EXCLUSIONS=<explicitly forbidden work and external effects>
 EXPECTED_READBACK=<exact artifacts, commands, SHAs, or runtime fields>
@@ -43,9 +46,11 @@ FACT_AND_AUTHORITY_BOUNDARY
   credential use, or destructive cleanup. Security-sensitive ambiguity fails closed.
 
 ACTION_SELECTION
-- Choose one smallest action that can change project state. Do not create filler,
-  duplicate work, empty heartbeats, status-only tasks, or work intended to consume
-  capacity.
+- When task, host, root, writer, inputs, and authority are complete, choose one
+  smallest stage-complete action rather than separate preflight, implementation,
+  test, build, and closeout prompts. Cover all applicable authorized gates through
+  final remote/target readback. Do not create filler, duplicate work, empty
+  heartbeats, status-only tasks, or work intended to consume capacity.
 - Parallel work is allowed only for fresh-admitted, complete, independent project
   actions with separate writer leases and no shared lock, candidate, target branch,
   release channel, or owner decision.
@@ -94,9 +99,27 @@ OWNER_ACTION_ROUTING
 - Resolve authorized mechanical, path, harness, and scheduling problems internally;
   do not send low-value messages or repeat an already delivered owner request.
 
+INTERNAL_RECOVERY_AND_REPORTING
+- This task may coordinate bounded non-writing helpers for diagnosis or evidence
+  aggregation. Helpers do not hold the writer lease and cannot mutate the repository,
+  Git state, remote state, or release channel.
+- Do not report routine half-steps, unchanged state, queue reminders, parser/path/
+  harness defects, or mechanically decidable outcomes to Root or the user. Return one
+  compact terminal evidence record. Coordinators aggregate actual dispatch and
+  terminal deltas rather than commentary.
+- A first formal/native nonzero ends only this round. Preserve every retained PASS,
+  mark later gates UNEXECUTED, and name one materially different recovery action.
+  The coordinator fresh-admits that action and resumes this same writer unless the
+  task is authoritatively proven stuck.
+- Escalate only genuine owner login/desktop/session work, credentials, external
+  ownership or branch choice not derivable from authority, destructive/high-impact
+  action, host migration, security/architecture direction, publication/release
+  beyond current authority, or authoritative proof that no safe next action exists.
+
 FORMAL_CHAIN
 Run only applicable gates in order:
-evidence -> focused test -> build -> diff/scope/secret check -> readback -> commit ->
+preflight -> implementation/diagnosis -> evidence -> focused test ->
+decision-changing full test/build -> diff/scope/secret check -> readback -> commit ->
 non-force push -> fast-forward merge -> remote/merge readback
 For every NOT_REQUIRED gate, record the contract reason. At the first formal/native
 nonzero, stop immediately, preserve retained and foreign state, and mark every later
@@ -106,6 +129,7 @@ different action.
 
 FINAL_READBACK
 OUTCOME_CLASS=PASS|BLOCKED|WAITING|UNEXECUTED|NOT_REQUIRED
+STAGE_STATUS=COMPLETE|ROUND_STOPPED_NEXT_ADMITTED|WAITING_OWNER_ONLY|BLOCKED_NO_SAFE_ACTION
 FIRST_NONZERO=<gate and exact result or NONE>
 EXECUTED=<ordered gates and evidence ids>
 UNEXECUTED=<ordered gates or NONE>
