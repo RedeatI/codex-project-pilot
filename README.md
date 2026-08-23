@@ -38,6 +38,13 @@ Skip repeated or decision-irrelevant checks while preserving required safety,
 authority, publication, merge, and release evidence. It also makes Sol-specific risk
 claims traceable instead of treating community anecdotes as facts.
 
+Delivery-first staging prioritizes core implementation, integration, and acceptance
+candidates. Non-blocking deep security research may be deferred into one explicit
+pre-release gate, while known critical/high findings, authentication and permission
+fail-closed behavior, credential and destructive-data risks, required dependency or
+supply-chain checks, and publication gates remain blocking. Focus-project preference
+never bypasses capacity, admission, authority, or writer-lease requirements.
+
 Optional per-task context-health readbacks make summary degradation and runtime
 context warnings auditable. Scheduling emits one deduplicated renewal recommendation
 to the sole migration controller; it never migrates a task based on a fixed number

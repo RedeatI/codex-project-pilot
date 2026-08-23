@@ -138,6 +138,20 @@ results are not proof of remote task state, GitHub state, merge, deployment, rel
 or production readiness. Record only `PASS`, `BLOCKED`, `WAITING`, `UNEXECUTED`, or
 `NOT_REQUIRED`, and never infer a launch date from incomplete evidence.
 
+## Delivery-first security staging
+
+When selecting among admitted project actions, prioritize core feature completion,
+integration, and acceptance-candidate evidence. Non-blocking deep security research
+may be scheduled as one explicit pre-release gate after the candidate exists; it is
+deferred, not waived, and readiness remains unproved until that gate closes.
+
+Do not defer a confirmed critical/high defect, authentication or authorization
+fail-closed behavior, credential exposure, destructive-data risk, a dependency or
+supply-chain check required to build or trust the candidate, or any publication and
+release authority gate. A focus-project priority applies only inside the effective
+dispatch budget and never bypasses fresh admission, exact host/root/task-worktree
+identity, unique writer lease, shared-state serialization, or first-nonzero stopping.
+
 ## Capacity expansion contract
 
 A request to raise portfolio concurrency changes only the configured policy ceiling.

@@ -23,6 +23,11 @@ host identity, or evidence boundaries.
    shared-state changes. A worker hidden inside an active Root turn still consumes
    capacity and a writer lease; if its identity or count cannot be read back,
    conservatively set new-dispatch budget to zero.
+   Prioritize complete implementation, integration, and acceptance-candidate actions
+   for the manifest's declared focus projects. Allocate new valid capacity to them
+   first only after effective-capacity, fresh-admission, authority, host/root, and
+   unique-writer gates pass. A priority label never justifies filler, duplicate tasks,
+   an invalid task/worktree, or an empty heartbeat.
    Treat `max_active_turns` as a configured portfolio ceiling, never as proof of a
    platform guarantee. If runtime provides a smaller authoritative ceiling, calculate
    the effective ceiling as the smaller value. Capacity beyond
@@ -60,8 +65,13 @@ host identity, or evidence boundaries.
    release state.
 5. Dispatch long contracts that cover safe preflight through verification. Include
    explicit stopping conditions and require final readback rather than frequent
-   status chatter. Use `PROJECT_TASK_CONTRACT_V2`; do not interpret permission to
+   status chatter. Use `PROJECT_TASK_CONTRACT_V2_1`; do not interpret permission to
    continue as deploy, release, credential, production-data, or destructive authority.
+   Default to delivery-first staging: finish core functionality, integration, and
+   acceptance evidence before non-blocking deep security research. Record deferred
+   research as an explicit pre-release gate. Never defer known critical/high defects,
+   authentication or permission fail-closed checks, credential or destructive-data
+   risks, necessary dependency/supply-chain checks, or publication controls.
 6. Monitor deltas, not full transcripts. Classify approval, missing authority,
    host mismatch, harness failure, product failure, and external-state waiting as
    different outcomes. Deduplicate context-renewal notifications by target and

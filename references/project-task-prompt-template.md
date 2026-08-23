@@ -1,13 +1,13 @@
 # Project task prompt contract
 
-Contract version: `PROJECT_TASK_CONTRACT_V2`
+Contract version: `PROJECT_TASK_CONTRACT_V2_1`
 Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
 
 Use this compact contract for a project implementation task. Root uses a separate
 control-only contract and must not execute these project steps.
 
 ```text
-PROJECT_TASK_CONTRACT_V2
+PROJECT_TASK_CONTRACT_V2_1
 PROJECT=<stable project id>
 ACTION_ID=<fresh exact action id>
 PROJECT_TASK_ID=<existing independent task id>
@@ -19,6 +19,7 @@ WRITER_LEASE=<project id + holder task id + evidence id>
 AUTHORITIES=<exact granted authorities>
 INPUTS=<complete candidate/input identities and retained evidence ids>
 OUTCOME=<smallest independently state-changing result>
+DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SECURITY
 EXCLUSIONS=<explicitly forbidden work and external effects>
 EXPECTED_READBACK=<exact artifacts, commands, SHAs, or runtime fields>
 
@@ -47,6 +48,12 @@ ACTION_SELECTION
 - Parallel work is allowed only for fresh-admitted, complete, independent project
   actions with separate writer leases and no shared lock, candidate, target branch,
   release channel, or owner decision.
+- Prefer core functionality, integration, and acceptance-candidate evidence. Defer
+  only non-blocking deep security research into an explicit pre-release gate; do not
+  infer readiness or release until it closes.
+- Never defer confirmed critical/high findings, authentication or authorization
+  fail-closed behavior, credential or destructive-data risks, necessary dependency
+  or supply-chain checks, or publication/release gates.
 
 VALIDATION_VALUE_GATE
 Before each proposed validation, emit:
