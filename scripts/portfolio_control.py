@@ -92,6 +92,26 @@ PROJECT_OWNER_GATE_CATEGORIES = {
     "irreversible_external_write",
     "major_architecture_direction",
 }
+CONTINUOUS_PROGRESS_INDEPENDENT_WORK_CATEGORIES = {
+    "feature",
+    "integration",
+    "test",
+    "documentation",
+    "performance",
+    "evidence",
+}
+CONTINUOUS_PROGRESS_TRUE_FIELDS = (
+    "enabled",
+    "next_stage_long_contract_required",
+    "fresh_admission_required",
+    "blocked_gate_state_preserved",
+    "acceptance_inference_forbidden",
+    "safety_authority_publication_gates_preserved",
+    "filler_or_duplicate_work_forbidden",
+    "project_controlled_helpers_allowed",
+    "helpers_count_toward_capacity",
+    "helpers_cannot_hold_writer_lease",
+)
 FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES = {
     "control_read",
     "manifest_read",
@@ -266,6 +286,7 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
         [
             "contract_version",
             "routine_public_network",
+            "continuous_progress",
             "owner_gate_categories",
             "first_nonzero_stops_round",
             "fresh_round_requires_material_difference",
@@ -317,6 +338,37 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
             )
         if network.get("credentials_allowed") is not False:
             errors.append(f"{network_context}: credentials_allowed must be false")
+    continuous_progress = value["continuous_progress"]
+    continuous_context = f"{context}.continuous_progress"
+    if not isinstance(continuous_progress, dict):
+        errors.append(f"{continuous_context}: must be an object")
+    else:
+        errors.extend(
+            require_fields(
+                continuous_progress,
+                [
+                    *CONTINUOUS_PROGRESS_TRUE_FIELDS,
+                    "independent_work_categories",
+                ],
+                continuous_context,
+            )
+        )
+        for field in CONTINUOUS_PROGRESS_TRUE_FIELDS:
+            if field in continuous_progress and continuous_progress[field] is not True:
+                errors.append(f"{continuous_context}: {field} must be true")
+        independent_work_categories = continuous_progress.get(
+            "independent_work_categories"
+        )
+        if (
+            not is_string_list(independent_work_categories)
+            or len(independent_work_categories)
+            != len(set(independent_work_categories or []))
+            or set(independent_work_categories)
+            != CONTINUOUS_PROGRESS_INDEPENDENT_WORK_CATEGORIES
+        ):
+            errors.append(
+                f"{continuous_context}: independent_work_categories must list the exact V2_4 categories"
+            )
     owner_gate_categories = value["owner_gate_categories"]
     if (
         not is_string_list(owner_gate_categories)

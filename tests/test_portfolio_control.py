@@ -74,6 +74,26 @@ def enable_v24_routine_public_network(manifest):
             ],
             "credentials_allowed": False,
         },
+        "continuous_progress": {
+            "enabled": True,
+            "next_stage_long_contract_required": True,
+            "fresh_admission_required": True,
+            "independent_work_categories": [
+                "feature",
+                "integration",
+                "test",
+                "documentation",
+                "performance",
+                "evidence",
+            ],
+            "blocked_gate_state_preserved": True,
+            "acceptance_inference_forbidden": True,
+            "safety_authority_publication_gates_preserved": True,
+            "filler_or_duplicate_work_forbidden": True,
+            "project_controlled_helpers_allowed": True,
+            "helpers_count_toward_capacity": True,
+            "helpers_cannot_hold_writer_lease": True,
+        },
         "owner_gate_categories": [
             "credential_or_private_data",
             "production_or_real_user_impact",
@@ -342,6 +362,37 @@ class PortfolioControlTests(unittest.TestCase):
         errors = CONTROL.validate_manifest(manifest)
         self.assertIn(
             "policy.project_owner_autonomy: owner_gate_categories must list the exact V2_4 owner gates",
+            errors,
+        )
+
+    def test_manifest_rejects_v24_policy_without_continuous_progress(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        del manifest["policy"]["project_owner_autonomy"]["continuous_progress"]
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy: missing continuous_progress",
+            errors,
+        )
+
+    def test_manifest_rejects_incomplete_continuous_progress_categories(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"]["continuous_progress"][
+            "independent_work_categories"
+        ].remove("performance")
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy.continuous_progress: independent_work_categories must list the exact V2_4 categories",
+            errors,
+        )
+
+    def test_manifest_rejects_continuous_progress_that_ignores_capacity(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"]["continuous_progress"][
+            "helpers_count_toward_capacity"
+        ] = False
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy.continuous_progress: helpers_count_toward_capacity must be true",
             errors,
         )
 

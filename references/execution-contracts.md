@@ -70,6 +70,24 @@ migration locks, first-nonzero semantics, secret checks, or publication readback
 Projects without the explicit authority record network work as `UNEXECUTED` and route
 only the smallest needed authority request.
 
+## Continuous project progress
+
+Under a complete V2.4 autonomy block, stage completion triggers the same project
+owner to plan and fresh-admit the next stage-complete long contract; it does not wait
+for a portfolio root. If a single acceptance or external gate is temporarily blocked,
+the owner preserves that gate as `BLOCKED`, leaves its dependent later gates
+`UNEXECUTED`, and chooses only authorized work that does not depend on it: feature,
+integration, test, documentation, performance, or evidence work that can materially
+change project state.
+
+Continuous progress is not permission to infer acceptance, rerun unchanged evidence,
+create filler, duplicate work, bypass safety or authority, publish, deploy, use
+credentials, or cross hosts. A project-controlled helper may perform an independent
+bounded subtask only when effective capacity permits; it is counted as an execution
+unit, stays within the owner's envelope, and cannot hold another writer lease. The
+first formal/native nonzero still stops the current round, after which the owner may
+fresh-admit only a materially different recovery or independent action.
+
 ## Admission
 
 Create a plan and runtime readback before risky work. The bundled `admit` command

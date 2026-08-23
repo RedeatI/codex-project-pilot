@@ -136,6 +136,15 @@ host identity, or evidence boundaries.
    writer or migration locks, first-nonzero behavior, secret checks, or publication
    controls. Older manifests remain valid but have no routine network authority unless
    they adopt the V2.4 policy and grant it per project.
+   A complete V2.4 autonomy block also enables continuous progress. After a stage
+   closes, the same project owner immediately plans and fresh-admits the next
+   stage-complete long contract. If one acceptance or external gate is temporarily
+   blocked, preserve it as `BLOCKED`, leave dependent later gates `UNEXECUTED`, and
+   select authorized feature, integration, test, documentation, performance, or
+   evidence work that does not depend on that gate. Never fabricate acceptance,
+   bypass safety/authority/publication evidence, repeat no-value work, or create
+   filler. Project-controlled helpers remain bounded by effective capacity and the
+   owner's envelope, and cannot acquire a second writer lease.
    Default to delivery-first staging: finish core functionality, integration, and
    acceptance evidence before non-blocking deep security research. Record deferred
    research as an explicit pre-release gate. Never defer known critical/high defects,

@@ -67,6 +67,14 @@ direction remain owner gates. Older manifests remain valid; they gain no network
 authority until they adopt the V2.4 policy and grant `routine_public_network` to the
 specific project.
 
+V2.4 continuous progress keeps a project moving after each completed stage: the same
+owner plans and fresh-admits the next long contract. A temporarily blocked acceptance
+or external gate stays visibly `BLOCKED`, with dependent gates `UNEXECUTED`, while
+independent feature, integration, test, documentation, performance, or evidence work
+continues inside the existing authority envelope. It never fabricates acceptance,
+bypasses safety or publication evidence, or creates filler and duplicate work.
+Project-controlled helpers remain capacity-counted nonwriters under the same owner.
+
 Delivery-first staging prioritizes core implementation, integration, and acceptance
 candidates. Non-blocking deep security research may be deferred into one explicit
 pre-release gate, while known critical/high findings, authentication and permission

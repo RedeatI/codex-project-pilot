@@ -32,6 +32,8 @@ EXPECTED_READBACK=<exact artifacts, commands, SHAs, or runtime fields>
 MIGRATION_STATE=NOT_REQUIRED|RECOMMENDED|HANDOFF_ONLY|ACCEPTED
 ROUTINE_PUBLIC_NETWORK=NOT_REQUIRED|AUTHORIZED
 ROUTINE_NETWORK_ENVELOPE=<purpose; exact domains/URLs; exact write locations; credential boundary; frequency; expected evidence; stop condition>
+CONTINUOUS_PROGRESS=AUTHORIZED|NOT_REQUIRED
+INDEPENDENT_WHILE_BLOCKED=<feature|integration|test|documentation|performance|evidence|NONE>
 
 ROLE_BOUNDARY
 - In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
@@ -76,6 +78,19 @@ ROUTINE_PUBLIC_NETWORK_BOUNDARY
   expansion, irreversible external writes, and major architecture direction remain
   owner gates. Routine public network authority cannot waive host/root, frozen task,
   writer, migration, first-nonzero, secret, or publication gates.
+
+CONTINUOUS_PROGRESS_BOUNDARY
+- After a stage completes, the same project owner immediately plans and fresh-admits
+  the next stage-complete long contract within `AUTHORITY_ENVELOPE`; it does not wait
+  for a portfolio root or split the stage into repeated half-step prompts.
+- If one acceptance or external gate is temporarily blocked, preserve it as
+  `BLOCKED`, mark its dependent later gates `UNEXECUTED`, and select only authorized
+  feature, integration, test, documentation, performance, or evidence work that does
+  not depend on that gate and can materially advance the project.
+- Never infer or fabricate acceptance, bypass safety/authority/publication evidence,
+  repeat unchanged checks, or create filler/duplicate work. A project-controlled
+  helper is counted against effective capacity, stays within this owner's envelope,
+  and cannot hold a second writer lease or mutate outside its exact delegated scope.
 
 ACTION_SELECTION
 - When task, host, root, writer, inputs, and authority are complete, choose one

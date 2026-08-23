@@ -38,6 +38,26 @@ or production data in it.
         ],
         "credentials_allowed": false
       },
+      "continuous_progress": {
+        "enabled": true,
+        "next_stage_long_contract_required": true,
+        "fresh_admission_required": true,
+        "independent_work_categories": [
+          "feature",
+          "integration",
+          "test",
+          "documentation",
+          "performance",
+          "evidence"
+        ],
+        "blocked_gate_state_preserved": true,
+        "acceptance_inference_forbidden": true,
+        "safety_authority_publication_gates_preserved": true,
+        "filler_or_duplicate_work_forbidden": true,
+        "project_controlled_helpers_allowed": true,
+        "helpers_count_toward_capacity": true,
+        "helpers_cannot_hold_writer_lease": true
+      },
       "owner_gate_categories": [
         "credential_or_private_data",
         "production_or_real_user_impact",
@@ -105,6 +125,15 @@ or production data in it.
   impact, destructive operations, publication/deployment, cross-host migration,
   material scope or dependency expansion, irreversible external writes, and major
   architecture direction remain owner gates.
+- The V2.4 `continuous_progress` block requires the same project owner to plan and
+  fresh-admit the next long-stage contract after a stage completes. When one
+  acceptance or external gate is blocked, it selects authorized work that does not
+  depend on that gate from the exact feature, integration, test, documentation,
+  performance, and evidence categories. The blocked gate remains `BLOCKED` and its
+  later gates remain `UNEXECUTED`; continuous progress never fabricates acceptance
+  or bypasses safety, authority, publication, host, root, writer, or migration gates.
+  Repeated no-value work and filler are forbidden. Project-controlled helpers are
+  allowed only inside effective capacity and cannot hold a second writer lease.
 - In federated mode, grant each owner only its project-local envelope, such as
   `project_local_decide`, `project_local_admission`, `project_execute`, and the
   exact repository/test/delivery authorities it needs. These never imply external
