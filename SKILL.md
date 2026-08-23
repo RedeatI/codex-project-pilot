@@ -37,15 +37,20 @@ host identity, or evidence boundaries.
    Require each active `running` monitor to renew an evidence-backed work lease by
    admitting, dispatching, advancing ledger evidence, or recording a terminal result.
    A plan, timestamp, topology snapshot, or no-change counter is not work. One empty
-   running check routes to attention; one empty waiting check pauses the monitor.
+   running check routes to attention; one empty waiting check prepares a pause.
+   Before any pause, including `waiting`, deliver one deduplicated result or decision
+   notice through the declared owner liaison, wait for its matching closure and
+   delivery-turn readback, persist that delivery preceded the pause, and keep success
+   notifications user-visible. A Root final alone is not delivery proof. If delivery
+   fails, pausing is forbidden and the next run may retry only that same closure.
 7. Append material decisions and terminal results to the hash-chained portfolio
    ledger. Recompute the next action from current evidence and continue while safe.
 8. Claim completion only after every requirement has authoritative evidence. Keep
    the user's full goal active when any requirement remains unproved.
 
 A heartbeat is a bounded control trigger, not progress by itself. It must perform or
-dispatch one admitted action and emit a `WORK_LEASE_READBACK`, or stop renewing the
-automation in that same run.
+dispatch one admitted action and emit a `WORK_LEASE_READBACK`, or enter the
+owner-liaison delivery gate before stopping automation renewal in that same run.
 
 Automatic advancement never implies automatic permission. Obtain explicit user
 authorization before external writes, repository publication, release, credential

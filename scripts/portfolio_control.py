@@ -41,6 +41,7 @@ CONTROL_LIFECYCLE_PHASES = {
     "stopped",
 }
 AUTOMATION_STATUSES = {"ACTIVE", "PAUSED", "MISSING"}
+AUTOMATION_NOTIFICATION_POLICIES = {"ALL", "FAILED_RUNS_ONLY", "UNKNOWN"}
 WORK_PROGRESS_KINDS = {
     "none",
     "admitted",
@@ -342,9 +343,12 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                 "consecutive_no_change",
                 "automation_id",
                 "automation_status",
+                "automation_notification_policy",
                 "closure_id",
                 "closure_delivered",
                 "closure_owner_liaison_task_id",
+                "closure_delivery_turn_id",
+                "pause_notice_delivered_before_pause",
             ]
             errors.extend(require_fields(lifecycle, lifecycle_fields, lifecycle_context))
             if all(field in lifecycle for field in lifecycle_fields):
@@ -360,6 +364,7 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                     "automation_id",
                     "closure_id",
                     "closure_owner_liaison_task_id",
+                    "closure_delivery_turn_id",
                 ):
                     value = lifecycle[field]
                     if value is not None and not is_non_empty_string(value):
@@ -377,14 +382,35 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                     )
                 if not is_enum_value(lifecycle["automation_status"], AUTOMATION_STATUSES):
                     errors.append(f"{lifecycle_context}: automation_status is invalid")
+                if not is_enum_value(
+                    lifecycle["automation_notification_policy"],
+                    AUTOMATION_NOTIFICATION_POLICIES,
+                ):
+                    errors.append(
+                        f"{lifecycle_context}: automation_notification_policy is invalid"
+                    )
                 if not isinstance(lifecycle["closure_delivered"], bool):
                     errors.append(f"{lifecycle_context}: closure_delivered must be boolean")
+                if not isinstance(
+                    lifecycle["pause_notice_delivered_before_pause"], bool
+                ):
+                    errors.append(
+                        f"{lifecycle_context}: pause_notice_delivered_before_pause must be boolean"
+                    )
                 if lifecycle["closure_delivered"] and (
                     lifecycle["closure_id"] is None
                     or lifecycle["closure_owner_liaison_task_id"] is None
+                    or lifecycle["closure_delivery_turn_id"] is None
                 ):
                     errors.append(
-                        f"{lifecycle_context}: delivered closure requires closure and liaison IDs"
+                        f"{lifecycle_context}: delivered closure requires closure, liaison, and delivery turn IDs"
+                    )
+                if (
+                    not lifecycle["closure_delivered"]
+                    and lifecycle["pause_notice_delivered_before_pause"]
+                ):
+                    errors.append(
+                        f"{lifecycle_context}: pause notice ordering cannot be true before closure delivery"
                     )
                 work_lease = lifecycle.get("work_lease")
                 if work_lease is not None:
@@ -1017,6 +1043,44 @@ def audit_topology(
                 consecutive_no_change=lifecycle["consecutive_no_change"],
                 incomplete_project_ids=incomplete_project_ids,
             )
+        if lifecycle["closure_delivered"]:
+            liaison = tasks.get(lifecycle["closure_owner_liaison_task_id"])
+            if liaison is None or liaison["role"] != "owner_liaison":
+                finding(
+                    "CONTROL_CLOSURE_WRONG_LIAISON",
+                    "control closure must be delivered to the declared owner liaison",
+                    closure_owner_liaison_task_id=lifecycle[
+                        "closure_owner_liaison_task_id"
+                    ],
+                    observed_role=None if liaison is None else liaison["role"],
+                )
+        if lifecycle["automation_status"] == "PAUSED":
+            if not lifecycle["closure_delivered"]:
+                finding(
+                    "PAUSED_AUTOMATION_WITHOUT_OWNER_NOTICE",
+                    "a monitor may pause only after an owner-liaison notice is delivered",
+                    phase=phase,
+                    closure_id=lifecycle["closure_id"],
+                    automation_id=lifecycle["automation_id"],
+                )
+            if not lifecycle["pause_notice_delivered_before_pause"]:
+                finding(
+                    "PAUSE_BEFORE_OWNER_NOTICE",
+                    "the delivered owner notice must be read back before the monitor pauses",
+                    phase=phase,
+                    closure_id=lifecycle["closure_id"],
+                    automation_id=lifecycle["automation_id"],
+                )
+            if lifecycle["automation_notification_policy"] != "ALL":
+                finding(
+                    "PAUSE_NOTICE_NOT_USER_VISIBLE",
+                    "a pause or stop notice must not be limited to failed runs",
+                    phase=phase,
+                    automation_id=lifecycle["automation_id"],
+                    automation_notification_policy=lifecycle[
+                        "automation_notification_policy"
+                    ],
+                )
         if phase in {"owner_attention", "complete", "stopped"}:
             if not lifecycle["closure_delivered"]:
                 finding(
@@ -1025,18 +1089,7 @@ def audit_topology(
                     phase=phase,
                     closure_id=lifecycle["closure_id"],
                 )
-            else:
-                liaison = tasks.get(lifecycle["closure_owner_liaison_task_id"])
-                if liaison is None or liaison["role"] != "owner_liaison":
-                    finding(
-                        "CONTROL_CLOSURE_WRONG_LIAISON",
-                        "control closure must be delivered to the declared owner liaison",
-                        closure_owner_liaison_task_id=lifecycle[
-                            "closure_owner_liaison_task_id"
-                        ],
-                        observed_role=None if liaison is None else liaison["role"],
-                    )
-            if lifecycle["automation_status"] == "ACTIVE":
+            if lifecycle["automation_status"] != "PAUSED":
                 finding(
                     "TERMINAL_AUTOMATION_NOT_PAUSED",
                     "attention or terminal control state requires the monitor automation to pause",

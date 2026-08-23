@@ -22,8 +22,10 @@ of compactions or an invented token threshold.
 Control-lifecycle readbacks distinguish a finished turn from a finished portfolio.
 An active running monitor must renew a machine-auditable work lease with admission,
 dispatch, ledger delta, or terminal evidence. Plans and timestamp-only snapshots do
-not count. The first empty running check escalates; the first empty waiting check
-pauses, preventing recurring automations from waking Root without advancing work.
+not count. The first empty check cannot create a silent stop: every pause must first
+send one deduplicated result or decision notice through the owner liaison, read back
+its matching delivery turn, and remain visible for successful as well as failed
+runs. Only then may the recurring automation pause.
 
 ## Install
 

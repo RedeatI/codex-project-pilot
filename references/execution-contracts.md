@@ -95,9 +95,10 @@ Set `authoritative` only from executor-owned runtime evidence. When
   running check. Plans,
   timestamps, topology refreshes, and no-change counters do not renew it. The first
   empty running check routes once to the owner liaison and pauses after delivery;
-  the first empty waiting check pauses immediately. A later poll needs a fresh,
-  bounded admission. Completion or an explicit stop follows the same closure
-  handshake.
+  the first empty waiting check also delivers an `INFO_ONLY` notice and obtains its
+  matching delivery-turn readback before pausing. Any pause, completion, or explicit
+  stop requires the same closure handshake and user-visible success notifications.
+  A delivery failure forbids pausing; a later poll needs a fresh, bounded admission.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,
   and mechanically decidable outcomes should remain terminal task records.
 - Distinguish `waiting` from `blocked`. Waiting has a known external event or user

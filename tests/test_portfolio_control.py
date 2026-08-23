@@ -96,9 +96,12 @@ def valid_topology():
             "consecutive_no_change": 0,
             "automation_id": "portfolio-heartbeat",
             "automation_status": "ACTIVE",
+            "automation_notification_policy": "ALL",
             "closure_id": None,
             "closure_delivered": False,
             "closure_owner_liaison_task_id": None,
+            "closure_delivery_turn_id": None,
+            "pause_notice_delivered_before_pause": False,
             "work_lease": {
                 "action_id": "alpha-action-1",
                 "admission_id": "alpha-admission-1",
@@ -511,7 +514,71 @@ class PortfolioControlTests(unittest.TestCase):
 
         lifecycle["automation_status"] = "PAUSED"
         result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("PAUSED_AUTOMATION_WITHOUT_OWNER_NOTICE", codes)
+        self.assertIn("PAUSE_BEFORE_OWNER_NOTICE", codes)
+
+        lifecycle.update(
+            {
+                "closure_id": "closure-1",
+                "closure_delivered": True,
+                "closure_owner_liaison_task_id": "liaison-1",
+                "closure_delivery_turn_id": "liaison-turn-1",
+                "pause_notice_delivered_before_pause": True,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
         self.assertTrue(result["ok"])
+
+    def test_topology_audit_rejects_muted_pause_notice(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle.update(
+            {
+                "phase": "waiting",
+                "safe_next_action": False,
+                "pending_wait_id": "external-job-1",
+                "automation_status": "PAUSED",
+                "automation_notification_policy": "FAILED_RUNS_ONLY",
+                "closure_id": "closure-1",
+                "closure_delivered": True,
+                "closure_owner_liaison_task_id": "liaison-1",
+                "closure_delivery_turn_id": "liaison-turn-1",
+                "pause_notice_delivered_before_pause": True,
+            }
+        )
+        del lifecycle["work_lease"]
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PAUSE_NOTICE_NOT_USER_VISIBLE",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_pause_before_owner_notice(self):
+        topology = valid_topology()
+        lifecycle = topology["control_lifecycle"]
+        lifecycle.update(
+            {
+                "phase": "waiting",
+                "safe_next_action": False,
+                "pending_wait_id": "external-job-1",
+                "automation_status": "PAUSED",
+                "closure_id": "closure-1",
+                "closure_delivered": True,
+                "closure_owner_liaison_task_id": "liaison-1",
+                "closure_delivery_turn_id": "liaison-turn-1",
+                "pause_notice_delivered_before_pause": False,
+            }
+        )
+        del lifecycle["work_lease"]
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PAUSE_BEFORE_OWNER_NOTICE",
+            {finding["code"] for finding in result["findings"]},
+        )
 
     def test_topology_audit_requires_liaison_and_paused_terminal_monitor(self):
         topology = valid_topology()
@@ -538,6 +605,8 @@ class PortfolioControlTests(unittest.TestCase):
                 "closure_id": "closure-1",
                 "closure_delivered": True,
                 "closure_owner_liaison_task_id": "liaison-1",
+                "closure_delivery_turn_id": "liaison-turn-1",
+                "pause_notice_delivered_before_pause": True,
             }
         )
         result = CONTROL.audit_topology(valid_manifest(), topology)
@@ -554,6 +623,8 @@ class PortfolioControlTests(unittest.TestCase):
                 "closure_id": "closure-1",
                 "closure_delivered": True,
                 "closure_owner_liaison_task_id": "liaison-1",
+                "closure_delivery_turn_id": "liaison-turn-1",
+                "pause_notice_delivered_before_pause": True,
             }
         )
         result = CONTROL.audit_topology(valid_manifest(), topology)

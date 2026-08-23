@@ -82,9 +82,12 @@ that the portfolio completed. Maintain an explicit `control_lifecycle` readback:
   "consecutive_no_change": 0,
   "automation_id": "portfolio-heartbeat",
   "automation_status": "ACTIVE",
+  "automation_notification_policy": "ALL",
   "closure_id": null,
   "closure_delivered": false,
   "closure_owner_liaison_task_id": null,
+  "closure_delivery_turn_id": null,
+  "pause_notice_delivered_before_pause": false,
   "work_lease": {
     "action_id": "project-a-wave-7",
     "admission_id": "admission-project-a-wave-7",
@@ -143,14 +146,28 @@ AUTOMATION_ACTION=KEEP_ACTIVE|PAUSE
 `KEEP_ACTIVE` is valid only for `running` with a renewed work lease. One empty
 running check on an incomplete portfolio, without an identified wait or owner
 request, requires `owner_attention`; do not wake Root again. A waiting monitor must
-pause after its first empty check. If polling is genuinely required later, admit one
-new bounded recheck at its due time; do not leave a frequent heartbeat active around
-an opaque client queue or placeholder ID. For
-`owner_attention`, `complete`, or `stopped`, send exactly one deduplicated closure
-packet to the declared owner liaison. After delivery, pause the monitor automation.
-Keep its configuration and evidence so a later user decision can resume it through
-fresh admission. Never infer a terminal phase from `idle`, a completed command, or
-one no-change result.
+prepare to pause after its first empty check. If polling is genuinely required
+later, admit one new bounded recheck at its due time; do not leave a frequent
+heartbeat active around an opaque client queue or placeholder ID.
+
+Every transition to `PAUSED`, including `waiting`, uses this hard exit gate:
+
+1. Create one stable, deduplicated `closure_id`.
+2. Send an `INFO_ONLY` result/wait notice, or a `DECISION_REQUIRED` packet only when
+   a real user choice exists, through the single declared owner liaison.
+3. Wait for `OWNER_NOTICE_DELIVERED` with the same closure ID and record its
+   authoritative delivery-turn ID. A Root final is not delivery proof.
+4. Persist `closure_delivered=true`,
+   `pause_notice_delivered_before_pause=true`, and
+   `automation_notification_policy=ALL`.
+5. Only then pause the monitor automation. If delivery fails, pausing and muted
+   success notifications are forbidden; retain the same closure ID and retry only
+   delivery in the next run.
+
+The topology audit rejects every paused automation without the delivery readback,
+ordering proof, and user-visible notification policy. Keep paused configuration and
+evidence so a later user decision can resume it through fresh admission. Never infer
+a terminal phase from `idle`, a completed command, or one no-change result.
 
 ## Context health and renewal notification
 
