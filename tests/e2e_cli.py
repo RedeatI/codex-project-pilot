@@ -137,7 +137,15 @@ def main() -> int:
                 "observed_at_utc": "2026-08-22T00:00:00Z",
                 "policy": {
                     "max_active_turns": 2,
+                    "baseline_max_active_turns": 2,
+                    "runtime_reported_max_active_turns": None,
                     "reserved_control_slots": 1,
+                    "dispatch_requirements": {
+                        "complete_input_required": True,
+                        "fresh_admission_required": True,
+                        "independent_writer_required": True,
+                        "effective_project_action_required": True,
+                    },
                     "max_writers_per_project": 1,
                     "control_roles": [
                         {
@@ -177,6 +185,7 @@ def main() -> int:
                         "writer": False,
                         "provisional": False,
                         "authorities": ["portfolio_decide"],
+                        "capacity_class": "baseline",
                     },
                     {
                         "task_id": "runtime-1",
@@ -189,6 +198,7 @@ def main() -> int:
                         "writer": False,
                         "provisional": False,
                         "authorities": ["ledger_write", "migration_control"],
+                        "capacity_class": "baseline",
                     },
                     {
                         "task_id": "alpha-owner",
@@ -201,6 +211,7 @@ def main() -> int:
                         "writer": True,
                         "provisional": False,
                         "authorities": ["control_write"],
+                        "capacity_class": "baseline",
                     },
                 ],
             },

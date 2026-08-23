@@ -18,6 +18,12 @@ High-concurrency audits count both visible active turns and nested workers, incl
 workers hidden inside Root or another controller. A configurable control-slot reserve
 is subtracted before computing the new-dispatch budget, so unrelated active tasks and
 in-turn helpers cannot silently overcommit the host or starve terminal-event handling.
+The configured limit is policy, not a claim about the Codex platform: an authoritative
+smaller runtime limit clamps the effective limit automatically. Capacity beyond the
+declared baseline is surge capacity and may carry only a complete, effective project
+action with a fresh `ZERO` admission and the same independent project task holding its
+writer lease. Control roles, nested workers, filler work, and duplicate actions cannot
+consume surge slots.
 Root remains a control-only role: project mutation and verification run in the
 project's independent task, with one writer lease and compact evidence or major
 decision requests returned to Root.

@@ -53,7 +53,15 @@ def valid_topology():
         "observed_at_utc": "2026-08-22T00:00:00Z",
         "policy": {
             "max_active_turns": 3,
+            "baseline_max_active_turns": 3,
+            "runtime_reported_max_active_turns": None,
             "reserved_control_slots": 1,
+            "dispatch_requirements": {
+                "complete_input_required": True,
+                "fresh_admission_required": True,
+                "independent_writer_required": True,
+                "effective_project_action_required": True,
+            },
             "max_writers_per_project": 1,
             "control_roles": [
                 {
@@ -130,6 +138,7 @@ def valid_topology():
                 "writer": False,
                 "provisional": False,
                 "authorities": ["portfolio_decide"],
+                "capacity_class": "baseline",
             },
             {
                 "task_id": "scheduler-1",
@@ -142,6 +151,7 @@ def valid_topology():
                 "writer": False,
                 "provisional": False,
                 "authorities": ["topology_read"],
+                "capacity_class": "baseline",
             },
             {
                 "task_id": "runtime-1",
@@ -154,6 +164,7 @@ def valid_topology():
                 "writer": False,
                 "provisional": False,
                 "authorities": ["ledger_write", "migration_control"],
+                "capacity_class": "baseline",
             },
             {
                 "task_id": "liaison-1",
@@ -166,6 +177,7 @@ def valid_topology():
                 "writer": False,
                 "provisional": False,
                 "authorities": ["owner_request"],
+                "capacity_class": "baseline",
             },
             {
                 "task_id": "alpha-owner",
@@ -178,6 +190,7 @@ def valid_topology():
                 "writer": True,
                 "provisional": False,
                 "authorities": ["repo_write"],
+                "capacity_class": "baseline",
             },
         ],
     }
@@ -320,6 +333,7 @@ class PortfolioControlTests(unittest.TestCase):
     def test_topology_audit_counts_nested_workers_in_capacity(self):
         topology = valid_topology()
         topology["policy"]["max_active_turns"] = 4
+        topology["policy"]["baseline_max_active_turns"] = 4
         topology["nested_workers"].append(
             {
                 "worker_id": "runtime-worker-1",
@@ -328,6 +342,7 @@ class PortfolioControlTests(unittest.TestCase):
                 "host_id": "local",
                 "active": True,
                 "writer": False,
+                "capacity_class": "baseline",
             }
         )
         result = CONTROL.audit_topology(valid_manifest(), topology)
@@ -336,6 +351,99 @@ class PortfolioControlTests(unittest.TestCase):
         self.assertEqual(result["active_nested_worker_count"], 1)
         self.assertEqual(result["active_execution_unit_count"], 3)
         self.assertEqual(result["new_dispatch_budget"], 0)
+
+    def test_topology_audit_uses_configured_limit_ten_without_runtime_cap(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 10
+        topology["policy"]["baseline_max_active_turns"] = 6
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["configured_max_active_turns"], 10)
+        self.assertEqual(result["effective_max_active_turns"], 10)
+        self.assertIsNone(result["runtime_reported_max_active_turns"])
+        self.assertEqual(result["new_dispatch_budget"], 7)
+
+    def test_topology_audit_clamps_limit_ten_to_runtime_readback(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 10
+        topology["policy"]["baseline_max_active_turns"] = 6
+        topology["policy"]["runtime_reported_max_active_turns"] = 8
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["configured_max_active_turns"], 10)
+        self.assertEqual(result["effective_max_active_turns"], 8)
+        self.assertEqual(result["new_dispatch_budget"], 5)
+
+    def test_topology_audit_requires_surge_evidence_beyond_baseline_envelope(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 10
+        topology["policy"]["baseline_max_active_turns"] = 2
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["required_surge_slot_count"], 1)
+        self.assertIn(
+            "SURGE_SLOT_EVIDENCE_MISSING",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_accepts_fresh_admitted_surge_project_writer(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 10
+        topology["policy"]["baseline_max_active_turns"] = 2
+        project_thread = topology["threads"][-1]
+        project_thread["capacity_class"] = "surge"
+        project_thread["dispatch_admission"] = {
+            "action_id": "alpha-effective-action-2",
+            "input_complete": True,
+            "admission_id": "alpha-admission-2",
+            "admission_result": "ZERO",
+            "writer_task_id": "alpha-owner",
+        }
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["required_surge_slot_count"], 1)
+        self.assertEqual(result["active_surge_slot_count"], 1)
+
+    def test_topology_audit_rejects_incomplete_or_nonzero_surge_action(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 10
+        topology["policy"]["baseline_max_active_turns"] = 2
+        project_thread = topology["threads"][-1]
+        project_thread["capacity_class"] = "surge"
+        project_thread["dispatch_admission"] = {
+            "action_id": "alpha-filler-action",
+            "input_complete": False,
+            "admission_id": "alpha-admission-nonzero",
+            "admission_result": "NONZERO",
+            "writer_task_id": "scheduler-1",
+        }
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertFalse(result["ok"])
+        self.assertIn("SURGE_INPUT_INCOMPLETE", codes)
+        self.assertIn("SURGE_FRESH_ADMISSION_REQUIRED", codes)
+        self.assertIn("SURGE_WRITER_IDENTITY_MISMATCH", codes)
+
+    def test_topology_audit_forbids_nested_worker_in_surge_capacity(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 10
+        topology["nested_workers"].append(
+            {
+                "worker_id": "runtime-surge-worker",
+                "controller_task_id": "runtime-1",
+                "project_id": None,
+                "host_id": "local",
+                "active": True,
+                "writer": False,
+                "capacity_class": "surge",
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "SURGE_NESTED_WORKER_FORBIDDEN",
+            {finding["code"] for finding in result["findings"]},
+        )
 
     def test_topology_audit_rejects_nested_worker_capacity_overflow(self):
         topology = valid_topology()
@@ -348,6 +456,7 @@ class PortfolioControlTests(unittest.TestCase):
                     "host_id": "local",
                     "active": True,
                     "writer": False,
+                    "capacity_class": "baseline",
                 },
                 {
                     "worker_id": "runtime-worker-2",
@@ -356,6 +465,7 @@ class PortfolioControlTests(unittest.TestCase):
                     "host_id": "local",
                     "active": True,
                     "writer": False,
+                    "capacity_class": "baseline",
                 },
             ]
         )
@@ -369,6 +479,7 @@ class PortfolioControlTests(unittest.TestCase):
     def test_topology_audit_counts_nested_project_writers(self):
         topology = valid_topology()
         topology["policy"]["max_active_turns"] = 4
+        topology["policy"]["baseline_max_active_turns"] = 4
         topology["nested_workers"].append(
             {
                 "worker_id": "alpha-worker-1",
@@ -377,6 +488,7 @@ class PortfolioControlTests(unittest.TestCase):
                 "host_id": "local",
                 "active": True,
                 "writer": True,
+                "capacity_class": "baseline",
             }
         )
         result = CONTROL.audit_topology(valid_manifest(), topology)
@@ -408,6 +520,7 @@ class PortfolioControlTests(unittest.TestCase):
                 "host_id": "local",
                 "active": False,
                 "writer": False,
+                "capacity_class": "baseline",
             }
         )
         result = CONTROL.audit_topology(valid_manifest(), topology)
@@ -420,6 +533,7 @@ class PortfolioControlTests(unittest.TestCase):
     def test_topology_audit_accepts_project_controlled_nested_worker(self):
         topology = valid_topology()
         topology["policy"]["max_active_turns"] = 4
+        topology["policy"]["baseline_max_active_turns"] = 4
         topology["nested_workers"].append(
             {
                 "worker_id": "alpha-worker-1",
@@ -428,6 +542,7 @@ class PortfolioControlTests(unittest.TestCase):
                 "host_id": "local",
                 "active": True,
                 "writer": False,
+                "capacity_class": "baseline",
             }
         )
         result = CONTROL.audit_topology(valid_manifest(), topology)

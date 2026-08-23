@@ -62,6 +62,13 @@ STAGE_CLOSEOUT_STEPS = (
     "push",
     "merge",
 )
+CAPACITY_CLASSES = {"baseline", "surge"}
+DISPATCH_REQUIREMENT_FIELDS = (
+    "complete_input_required",
+    "fresh_admission_required",
+    "independent_writer_required",
+    "effective_project_action_required",
+)
 ADMISSION_BOOLEAN_FIELDS = {
     "external_mutation",
     "user_authorized",
@@ -116,6 +123,12 @@ def is_lower_hex(value: Any, length: int) -> bool:
 
 def is_enum_value(value: Any, choices: set[str]) -> bool:
     return isinstance(value, str) and value in choices
+
+
+def effective_max_active_turns(policy: dict[str, Any]) -> int:
+    configured = policy["max_active_turns"]
+    runtime_reported = policy["runtime_reported_max_active_turns"]
+    return configured if runtime_reported is None else min(configured, runtime_reported)
 
 
 def validate_manifest(manifest: dict[str, Any]) -> list[str]:
@@ -262,7 +275,10 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                 policy,
                 [
                     "max_active_turns",
+                    "baseline_max_active_turns",
+                    "runtime_reported_max_active_turns",
                     "reserved_control_slots",
+                    "dispatch_requirements",
                     "max_writers_per_project",
                     "control_roles",
                     "migration_controller_role",
@@ -270,10 +286,53 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                 "topology.policy",
             )
         )
-        for field in ("max_active_turns", "max_writers_per_project"):
+        for field in (
+            "max_active_turns",
+            "baseline_max_active_turns",
+            "max_writers_per_project",
+        ):
             value = policy.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
                 errors.append(f"topology.policy: {field} must be a positive integer")
+        configured_limit = policy.get("max_active_turns")
+        baseline_limit = policy.get("baseline_max_active_turns")
+        if (
+            isinstance(configured_limit, int)
+            and not isinstance(configured_limit, bool)
+            and isinstance(baseline_limit, int)
+            and not isinstance(baseline_limit, bool)
+            and baseline_limit > configured_limit
+        ):
+            errors.append(
+                "topology.policy: baseline_max_active_turns cannot exceed max_active_turns"
+            )
+        runtime_limit = policy.get("runtime_reported_max_active_turns")
+        if runtime_limit is not None and (
+            not isinstance(runtime_limit, int)
+            or isinstance(runtime_limit, bool)
+            or runtime_limit < 1
+        ):
+            errors.append(
+                "topology.policy: runtime_reported_max_active_turns must be null or a positive integer"
+            )
+        dispatch_requirements = policy.get("dispatch_requirements")
+        if not isinstance(dispatch_requirements, dict):
+            errors.append("topology.policy: dispatch_requirements must be an object")
+        else:
+            errors.extend(
+                require_fields(
+                    dispatch_requirements,
+                    list(DISPATCH_REQUIREMENT_FIELDS),
+                    "topology.policy.dispatch_requirements",
+                )
+            )
+            for field in DISPATCH_REQUIREMENT_FIELDS:
+                if field in dispatch_requirements and not isinstance(
+                    dispatch_requirements[field], bool
+                ):
+                    errors.append(
+                        f"topology.policy.dispatch_requirements: {field} must be boolean"
+                    )
         reserved_control_slots = policy.get("reserved_control_slots")
         if (
             not isinstance(reserved_control_slots, int)
@@ -283,14 +342,18 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             errors.append(
                 "topology.policy: reserved_control_slots must be a non-negative integer"
             )
-        elif (
-            isinstance(policy.get("max_active_turns"), int)
-            and not isinstance(policy.get("max_active_turns"), bool)
-            and reserved_control_slots >= policy["max_active_turns"]
-        ):
-            errors.append(
-                "topology.policy: reserved_control_slots must be less than max_active_turns"
+        elif isinstance(configured_limit, int) and not isinstance(configured_limit, bool):
+            effective_limit = (
+                configured_limit
+                if runtime_limit is None
+                else min(configured_limit, runtime_limit)
+                if isinstance(runtime_limit, int) and not isinstance(runtime_limit, bool)
+                else None
             )
+            if effective_limit is not None and reserved_control_slots >= effective_limit:
+                errors.append(
+                    "topology.policy: reserved_control_slots must be less than the effective active-turn limit"
+                )
         if not is_non_empty_string(policy.get("migration_controller_role")):
             errors.append(
                 "topology.policy: migration_controller_role must be a non-empty string"
@@ -541,6 +604,7 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         "host_id",
         "active",
         "writer",
+        "capacity_class",
     ]
     for index, worker in enumerate(nested_workers):
         context = f"topology.nested_workers[{index}]"
@@ -564,6 +628,8 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         for field in ("active", "writer"):
             if not isinstance(worker[field], bool):
                 errors.append(f"{context}: {field} must be boolean")
+        if not is_enum_value(worker["capacity_class"], CAPACITY_CLASSES):
+            errors.append(f"{context}: capacity_class is invalid")
 
     stage_closeouts = topology["stage_closeouts"]
     if not isinstance(stage_closeouts, list):
@@ -659,6 +725,7 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         "writer",
         "provisional",
         "authorities",
+        "capacity_class",
     ]
     for index, thread in enumerate(threads):
         context = f"topology.threads[{index}]"
@@ -695,6 +762,36 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             errors.append(f"{context}: authorities must be an array of strings")
         elif len(thread["authorities"]) != len(set(thread["authorities"])):
             errors.append(f"{context}: authorities must not contain duplicates")
+        if not is_enum_value(thread["capacity_class"], CAPACITY_CLASSES):
+            errors.append(f"{context}: capacity_class is invalid")
+        dispatch_admission = thread.get("dispatch_admission")
+        if dispatch_admission is not None:
+            admission_context = f"{context}.dispatch_admission"
+            admission_fields = [
+                "action_id",
+                "input_complete",
+                "admission_id",
+                "admission_result",
+                "writer_task_id",
+            ]
+            if not isinstance(dispatch_admission, dict):
+                errors.append(f"{admission_context}: must be null or an object")
+            else:
+                errors.extend(
+                    require_fields(dispatch_admission, admission_fields, admission_context)
+                )
+                if all(field in dispatch_admission for field in admission_fields):
+                    for field in ("action_id", "admission_id", "writer_task_id"):
+                        if not is_non_empty_string(dispatch_admission[field]):
+                            errors.append(
+                                f"{admission_context}: {field} must be a non-empty string"
+                            )
+                    if not isinstance(dispatch_admission["input_complete"], bool):
+                        errors.append(f"{admission_context}: input_complete must be boolean")
+                    if not is_enum_value(
+                        dispatch_admission["admission_result"], WORK_ADMISSION_RESULTS
+                    ):
+                        errors.append(f"{admission_context}: admission_result is invalid")
         context_health = thread.get("context_health")
         if context_health is None:
             continue
@@ -781,6 +878,9 @@ def audit_topology(
         findings.append(item)
 
     policy = topology["policy"]
+    control_role_names = {
+        definition["role"] for definition in policy["control_roles"]
+    }
     threads = topology["threads"]
     nested_workers = topology["nested_workers"]
     stage_closeouts = topology["stage_closeouts"]
@@ -789,9 +889,24 @@ def audit_topology(
     active_threads = [thread for thread in threads if thread["active_turn"]]
     active_nested_workers = [worker for worker in nested_workers if worker["active"]]
     active_execution_unit_count = len(active_threads) + len(active_nested_workers)
+    configured_max_active_turns = policy["max_active_turns"]
+    runtime_reported_max_active_turns = policy["runtime_reported_max_active_turns"]
+    effective_limit = effective_max_active_turns(policy)
+    baseline_limit = policy["baseline_max_active_turns"]
+    active_surge_threads = [
+        thread
+        for thread in active_threads
+        if thread["capacity_class"] == "surge"
+    ]
+    required_surge_slot_count = max(
+        0,
+        active_execution_unit_count
+        + policy["reserved_control_slots"]
+        - baseline_limit,
+    )
     new_dispatch_budget = max(
         0,
-        policy["max_active_turns"]
+        effective_limit
         - active_execution_unit_count
         - policy["reserved_control_slots"],
     )
@@ -802,17 +917,26 @@ def audit_topology(
             "NON_AUTHORITATIVE_TOPOLOGY",
             "topology audit requires executor-owned runtime readback",
         )
-    if len(active_threads) > policy["max_active_turns"]:
+    for requirement, enabled in policy["dispatch_requirements"].items():
+        if not enabled:
+            finding(
+                "DISPATCH_REQUIREMENT_DISABLED",
+                "all surge-slot dispatch requirements must remain enabled",
+                requirement=requirement,
+            )
+    if len(active_threads) > effective_limit:
         finding(
             "ACTIVE_TURN_LIMIT_EXCEEDED",
-            "active turns exceed the configured portfolio limit",
+            "active turns exceed the configured limit after runtime clamping",
             active_turn_count=len(active_threads),
-            max_active_turns=policy["max_active_turns"],
+            configured_max_active_turns=configured_max_active_turns,
+            effective_max_active_turns=effective_limit,
+            runtime_reported_max_active_turns=runtime_reported_max_active_turns,
             task_ids=[thread["task_id"] for thread in active_threads],
         )
     if (
         active_nested_workers
-        and active_execution_unit_count > policy["max_active_turns"]
+        and active_execution_unit_count > effective_limit
     ):
         finding(
             "ACTIVE_EXECUTION_UNIT_LIMIT_EXCEEDED",
@@ -820,7 +944,9 @@ def audit_topology(
             active_turn_count=len(active_threads),
             active_nested_worker_count=len(active_nested_workers),
             active_execution_unit_count=active_execution_unit_count,
-            max_active_execution_units=policy["max_active_turns"],
+            configured_max_active_execution_units=configured_max_active_turns,
+            effective_max_active_execution_units=effective_limit,
+            runtime_reported_max_active_turns=runtime_reported_max_active_turns,
             worker_ids=[worker["worker_id"] for worker in active_nested_workers],
         )
 
@@ -869,6 +995,51 @@ def audit_topology(
                 task_id=thread["task_id"],
                 state=thread["state"],
             )
+        if thread["active_turn"] and thread["capacity_class"] == "surge":
+            dispatch_admission = thread.get("dispatch_admission")
+            if (
+                thread["role"] in control_role_names
+                or thread["project_id"] is None
+                or not thread["writer"]
+            ):
+                finding(
+                    "SURGE_PROJECT_WRITER_REQUIRED",
+                    "a surge slot can carry only an independent project writer action",
+                    task_id=thread["task_id"],
+                    role=thread["role"],
+                    project_id=thread["project_id"],
+                    writer=thread["writer"],
+                )
+            if dispatch_admission is None:
+                finding(
+                    "SURGE_ADMISSION_EVIDENCE_MISSING",
+                    "an active surge task requires complete input and fresh ZERO admission evidence",
+                    task_id=thread["task_id"],
+                )
+            else:
+                if not dispatch_admission["input_complete"]:
+                    finding(
+                        "SURGE_INPUT_INCOMPLETE",
+                        "a surge slot cannot carry an incomplete or filler action",
+                        task_id=thread["task_id"],
+                        action_id=dispatch_admission["action_id"],
+                    )
+                if dispatch_admission["admission_result"] != "ZERO":
+                    finding(
+                        "SURGE_FRESH_ADMISSION_REQUIRED",
+                        "a surge action requires a fresh admission result of ZERO",
+                        task_id=thread["task_id"],
+                        action_id=dispatch_admission["action_id"],
+                        admission_id=dispatch_admission["admission_id"],
+                        admission_result=dispatch_admission["admission_result"],
+                    )
+                if dispatch_admission["writer_task_id"] != thread["task_id"]:
+                    finding(
+                        "SURGE_WRITER_IDENTITY_MISMATCH",
+                        "surge admission must name the same independent project writer task",
+                        task_id=thread["task_id"],
+                        writer_task_id=dispatch_admission["writer_task_id"],
+                    )
         if thread["provisional"] and thread["state"] not in {"queued", "handoff_only"}:
             finding(
                 "PROVISIONAL_TASK_NOT_FROZEN",
@@ -961,6 +1132,14 @@ def audit_topology(
             )
 
     for worker in nested_workers:
+        if worker["capacity_class"] == "surge":
+            finding(
+                "SURGE_NESTED_WORKER_FORBIDDEN",
+                "expanded capacity is reserved for independent project tasks, never nested workers",
+                worker_id=worker["worker_id"],
+                controller_task_id=worker["controller_task_id"],
+                active=worker["active"],
+            )
         controller = tasks.get(worker["controller_task_id"])
         if controller is None:
             finding(
@@ -1008,6 +1187,17 @@ def audit_topology(
                 )
             else:
                 writer_counts[worker["project_id"]] += 1
+
+    if len(active_surge_threads) < required_surge_slot_count:
+        finding(
+            "SURGE_SLOT_EVIDENCE_MISSING",
+            "active load beyond the baseline dispatch envelope requires eligible surge project tasks",
+            baseline_max_active_turns=baseline_limit,
+            reserved_control_slots=policy["reserved_control_slots"],
+            required_surge_slot_count=required_surge_slot_count,
+            active_surge_slot_count=len(active_surge_threads),
+            active_execution_unit_count=active_execution_unit_count,
+        )
 
     stage_closeout_status_counts: Counter[str] = Counter()
     for closeout in stage_closeouts:
@@ -1519,6 +1709,12 @@ def audit_topology(
         "active_turn_count": len(active_threads),
         "active_nested_worker_count": len(active_nested_workers),
         "active_execution_unit_count": active_execution_unit_count,
+        "configured_max_active_turns": configured_max_active_turns,
+        "effective_max_active_turns": effective_limit,
+        "runtime_reported_max_active_turns": runtime_reported_max_active_turns,
+        "baseline_max_active_turns": baseline_limit,
+        "required_surge_slot_count": required_surge_slot_count,
+        "active_surge_slot_count": len(active_surge_threads),
         "reserved_control_slots": policy["reserved_control_slots"],
         "new_dispatch_budget": new_dispatch_budget,
         "stage_closeout_count": len(stage_closeouts),

@@ -23,6 +23,14 @@ host identity, or evidence boundaries.
    shared-state changes. A worker hidden inside an active Root turn still consumes
    capacity and a writer lease; if its identity or count cannot be read back,
    conservatively set new-dispatch budget to zero.
+   Treat `max_active_turns` as a configured portfolio ceiling, never as proof of a
+   platform guarantee. If runtime provides a smaller authoritative ceiling, calculate
+   the effective ceiling as the smaller value. Capacity beyond
+   `baseline_max_active_turns` is surge capacity: dispatch it only to a complete,
+   effective project action with fresh admission `ZERO`, an exact action ID, and the
+   same independent project task holding the writer lease. Never fill surge capacity
+   with control roles, nested workers, empty helpers, duplicate work, or migration
+   bypasses.
    Root owns admission, authority, priority, stop conditions, major decisions, and
    result aggregation only. Project implementation, tests, builds, fixes, and
    delivery must run in that project's independent task. Root cannot substitute

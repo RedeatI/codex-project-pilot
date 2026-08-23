@@ -121,6 +121,21 @@ project task that owns the admitted host/root/candidate and writer lease. If tha
 task is unavailable or identity cannot be proved, stop and route the blocker; never
 move execution into Root or a Root-controlled nested worker.
 
+## Capacity expansion contract
+
+A request to raise portfolio concurrency changes only the configured policy ceiling.
+It cannot override a smaller runtime hard limit. Persist both values and compute the
+effective ceiling as their minimum; when no authoritative runtime number exists,
+record it as unknown rather than inventing a guarantee.
+
+Capacity beyond the previous baseline is admitted one effective project action at a
+time. Before dispatch, prove complete input, a non-empty action ID, fresh admission
+`ZERO`, the exact independent project task, and its writer lease. Then apply the same
+host, migration, authority, shared-state, and first-nonzero gates used at baseline.
+Control work, nested helpers, duplicate actions, empty tasks, and synthetic capacity
+tests are not valid surge work. Do not create filler tasks merely to demonstrate that
+the configured number is reachable.
+
 ## Stage closeout contract
 
 After a project stage reaches its intended evidence state, its project task runs one

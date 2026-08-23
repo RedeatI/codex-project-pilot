@@ -54,16 +54,29 @@ project writer(s) -> runtime supervisor -> root controller
 - A provisional successor never holds a writer lease. Keep it `queued` or
   `handoff_only` until the handoff is accepted and the controller finalizes the
   transfer.
-- Count active turns, not every saved or idle task, against `max_active_turns`.
+- Count active turns, not every saved or idle task, against the effective active-turn
+  limit. `max_active_turns` is the configured policy ceiling; it is not evidence of a
+  platform guarantee. When the runtime reports a smaller authoritative ceiling, use
+  `effective_max_active_turns = min(max_active_turns,
+  runtime_reported_max_active_turns)`. A null runtime readback means no smaller limit
+  has been established, not that the platform guarantees the configured number.
   Control tasks consume capacity while they are actually running. Reserve enough
   headroom for root or runtime supervision to process a terminal event without
   starving the portfolio.
 - Count each active nested worker as another execution unit even when it does not
   appear as a top-level task. Nested writers also consume the project's single
-  writer lease. Compute `new_dispatch_budget = max(0, max_active_turns -
+  writer lease. Compute `new_dispatch_budget = max(0, effective_max_active_turns -
   active_turns - active_nested_workers - reserved_control_slots)`. If the runtime
   exposes only a worker-count lower bound or omits worker identity, use a zero
   dispatch budget until an authoritative readback resolves it.
+- A configured increase above `baseline_max_active_turns` creates surge capacity, not
+  filler capacity. When active load plus the control reserve exceeds the baseline,
+  each excess unit must be an active independent project writer labeled
+  `capacity_class=surge`. It must carry `dispatch_admission` with a non-empty action
+  and admission ID, `input_complete=true`, `admission_result=ZERO`, and
+  `writer_task_id` equal to that task's exact ID. Control roles and nested workers
+  cannot use surge capacity. Existing migration, authority, first-nonzero, shared-state,
+  and one-writer gates remain unchanged.
 - A project-associated nested worker must be controlled by that project's task.
   It normally operates under the controller's one writer lease; set the nested
   worker's `writer=true` only after a formal lease transfer makes the controller
@@ -255,8 +268,16 @@ Create a JSON snapshot from current runtime metadata:
   "authoritative": true,
   "observed_at_utc": "2026-08-22T00:00:00Z",
   "policy": {
-    "max_active_turns": 6,
+    "max_active_turns": 10,
+    "baseline_max_active_turns": 6,
+    "runtime_reported_max_active_turns": null,
     "reserved_control_slots": 2,
+    "dispatch_requirements": {
+      "complete_input_required": true,
+      "fresh_admission_required": true,
+      "independent_writer_required": true,
+      "effective_project_action_required": true
+    },
     "max_writers_per_project": 1,
     "control_roles": [
       {
@@ -286,7 +307,8 @@ Create a JSON snapshot from current runtime metadata:
       "project_id": "privacy-agent-router",
       "host_id": "local",
       "active": true,
-      "writer": false
+      "writer": false,
+      "capacity_class": "baseline"
     }
   ],
   "stage_closeouts": [
@@ -330,7 +352,8 @@ Create a JSON snapshot from current runtime metadata:
       "active_turn": false,
       "writer": false,
       "provisional": false,
-      "authorities": ["ledger_write", "migration_control"]
+      "authorities": ["ledger_write", "migration_control"],
+      "capacity_class": "baseline"
     },
     {
       "task_id": "root-task-1",
@@ -343,7 +366,8 @@ Create a JSON snapshot from current runtime metadata:
       "active_turn": true,
       "writer": false,
       "provisional": false,
-      "authorities": ["portfolio_decide"]
+      "authorities": ["portfolio_decide"],
+      "capacity_class": "baseline"
     },
     {
       "task_id": "privacy-task-1",
@@ -356,7 +380,8 @@ Create a JSON snapshot from current runtime metadata:
       "active_turn": true,
       "writer": true,
       "provisional": false,
-      "authorities": ["project_execute"]
+      "authorities": ["project_execute"],
+      "capacity_class": "baseline"
     }
   ]
 }
@@ -386,8 +411,9 @@ checks:
 
 - required control-role presence, multiplicity, and authorities;
 - active-turn capacity and status consistency;
-- nested-worker capacity, controller/host consistency, reserved control slots, and
-  the resulting new-dispatch budget;
+- configured, runtime-clamped effective, baseline, and surge capacity; eligible
+  full-input/fresh-admitted independent project writers; nested-worker capacity;
+  controller/host consistency; reserved control slots; and the resulting dispatch budget;
 - Root/project execution separation and project-worker controller identity;
 - project-stage evidence/test/build/diff/readback-to-commit/push/merge closure,
   including exact executor, branches, stop-on-first-nonzero, and SHA readbacks;
