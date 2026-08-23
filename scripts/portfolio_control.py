@@ -1774,14 +1774,17 @@ def audit_topology(
                 owner_task_id=owner_task_id,
                 observed_project_id=owner["project_id"],
             )
-        if not owner["writer"]:
+        owner_runtime_required = (
+            governance_mode != "federated_thin_kernel" or federated_owner_required
+        )
+        if owner_runtime_required and not owner["writer"]:
             finding(
                 "OWNER_WITHOUT_WRITER_LEASE",
                 "manifest owner task must hold the project's writer lease",
                 project_id=project_id,
                 owner_task_id=owner_task_id,
             )
-        if owner["state"] not in LIVE_CONTROL_STATES:
+        if owner_runtime_required and owner["state"] not in LIVE_CONTROL_STATES:
             finding(
                 "OWNER_TASK_NOT_LIVE",
                 "manifest owner task must be live to exercise project autonomy",

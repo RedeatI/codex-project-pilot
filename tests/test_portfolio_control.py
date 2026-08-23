@@ -601,6 +601,32 @@ class PortfolioControlTests(unittest.TestCase):
             {finding["code"] for finding in result["findings"]},
         )
 
+    def test_topology_audit_exempts_frozen_federated_owner_runtime_requirements(self):
+        manifest = valid_manifest()
+        manifest["policy"]["governance_mode"] = "federated_thin_kernel"
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        manifest["projects"][0]["state"] = "frozen"
+        topology = valid_federated_topology()
+        owner = next(
+            thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+        )
+        owner["writer"] = False
+        owner["state"] = "unavailable"
+        owner["active_turn"] = False
+        owner["authorities"] = ["repo_read"]
+
+        result = CONTROL.audit_topology(manifest, topology)
+
+        self.assertTrue(result["ok"])
+        self.assertNotIn(
+            "OWNER_WITHOUT_WRITER_LEASE",
+            {finding["code"] for finding in result["findings"]},
+        )
+        self.assertNotIn(
+            "OWNER_TASK_NOT_LIVE",
+            {finding["code"] for finding in result["findings"]},
+        )
+
     def test_topology_audit_reserves_project_local_governance_for_owner(self):
         manifest = valid_manifest()
         manifest["policy"]["governance_mode"] = "federated_thin_kernel"
