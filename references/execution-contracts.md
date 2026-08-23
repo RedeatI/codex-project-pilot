@@ -105,6 +105,12 @@ Set `authoritative` only from executor-owned runtime evidence. When
   A delivery failure forbids pausing; a later poll needs a fresh, bounded admission.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,
   and mechanically decidable outcomes should remain terminal task records.
+- If fresh evidence proves progress needs user judgment, a choice, login, desktop
+  action, host migration, or another owner-only action, send one timely packet
+  through the owner liaison. Name the exact blocker, why current authority cannot
+  resolve it, the smallest options, the recommendation, and the post-answer next
+  step. Do not silently wait. Do not escalate mechanical, path, harness, or
+  scheduling issues that the current tasks are authorized to resolve.
 - Distinguish `waiting` from `blocked`. Waiting has a known external event or user
   action; blocked lacks authority or a viable next action.
 - A harness-only failure cannot invalidate already verified product bytes. Preserve
@@ -151,6 +157,25 @@ Only the sole migration controller performs the migration under the one global l
 Parallel, duplicate, or ambiguous successors remain frozen at `HANDOFF_ONLY` and are
 converged serially. A first formal/native nonzero stops later migration gates as
 `UNEXECUTED`; a new attempt requires a new round and materially different action.
+
+### Cross-host migration request contract
+
+Willingness to consider a named source-to-target host move permits only an exact
+`CROSS_HOST_MIGRATION_REQUEST_V1`; it does not authorize execution. Same-host
+continuation remains the default. The scheduler may propose the request only when
+fresh executor evidence proves that the source-host blocker prevents the next
+admitted project action, same-host recovery cannot remove it, and an authoritative
+target host plus exact target path would materially change the decision.
+
+The packet includes exact project/task, source host/root/worktree and blocker,
+target host/path, frozen model/thinking and role, writer/candidate identities,
+retained worktree/evidence and hashes, cross-host byte-carrier requirements, the sole
+controller and single-lock sequence, HANDOFF_ONLY boundary, stop conditions, and a
+rollback plan that preserves the source until target acceptance. Send it through the
+owner liaison. Missing or speculative fields stop the request; they are not inferred.
+Only a later exact user authorization may admit controller execution. Until then,
+host change, replacement creation, byte transfer, archive, writer transfer, and lock
+acquisition are `UNEXECUTED`.
 
 ## Validation-value gate
 

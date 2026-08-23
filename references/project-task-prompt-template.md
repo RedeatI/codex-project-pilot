@@ -75,10 +75,24 @@ THREAD_RECOVERY_BOUNDARY
 - Send one deduplicated MIGRATION_RECOMMENDED packet to the sole controller. The
   controller alone acquires the global lock and creates or selects one non-writer
   HANDOFF_ONLY successor on the same host/role/model/thinking.
+- User willingness to consider another host authorizes only an exact
+  CROSS_HOST_MIGRATION_REQUEST_V1 through the owner liaison. It must prove the
+  source-host blocker and name the target host/path, preserved worktree/evidence,
+  frozen model/thinking, single-lock sequence, and rollback. Without a later exact
+  authorization, host change, replacement creation, byte transfer, writer transfer,
+  archive, and lock acquisition are UNEXECUTED.
 - Preserve the old task, worktree, and retained evidence. Writer transfer and old-task
   recoverable archive occur only after HANDOFF_ACCEPTED. Never delete or duplicate.
 - The successor needs fresh admission for its materially different project action
   and obeys first-nonzero stopping.
+
+OWNER_ACTION_ROUTING
+- If progress truly requires user judgment, a selection, login, desktop action, host
+  migration, or another owner-only action, send one timely minimal packet through
+  the owner liaison: exact blocker, why current authority cannot solve it, smallest
+  options, recommendation, and next step. Do not silently wait.
+- Resolve authorized mechanical, path, harness, and scheduling problems internally;
+  do not send low-value messages or repeat an already delivered owner request.
 
 FORMAL_CHAIN
 Run only applicable gates in order:

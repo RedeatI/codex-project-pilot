@@ -58,6 +58,17 @@ successor stays `HANDOFF_ONLY` until `HANDOFF_ACCEPTED`; only then may the write
 lease transfer and the preserved old task be recoverably archived. Old tasks,
 worktrees, and retained evidence are never deleted.
 
+Cross-host relocation is a separate, proposal-only gate. A user's willingness to
+consider a move does not authorize it. The scheduler may request one only after
+source-host necessity and an exact target host/path are proven, and the packet must
+preserve model/thinking, worktree and retained evidence, the single migration lock,
+and a recoverable rollback. Execution waits for a new exact user authorization.
+
+Real owner-dependent blockers are never left in silent waiting. The owner liaison
+receives one exact blocker, the reason automation cannot solve it, minimal options,
+the recommendation, and the next step. Authorized mechanical, path, harness, and
+scheduling issues stay internal and do not generate low-value user messages.
+
 Control-lifecycle readbacks distinguish a finished turn from a finished portfolio.
 An active running monitor must renew a machine-auditable work lease with admission,
 dispatch, ledger delta, or terminal evidence. Plans and timestamp-only snapshots do

@@ -45,6 +45,20 @@ project writer(s) -> runtime supervisor -> root controller
   execute in the corresponding project task. Root must not become a writer or use a
   Root-controlled nested worker as a substitute for an unavailable project task.
 
+### Owner-action escalation
+
+Do not let a genuinely owner-dependent project remain silently blocked. When fresh
+evidence proves that progress needs user judgment, a selection, login, desktop
+operation, host migration, or another owner-only action, send one deduplicated
+packet through the owner liaison. Include the exact blocker and evidence, why the
+project and control tasks cannot resolve it under current authority, the smallest
+viable options, one recommendation, and the exact next step after the response.
+
+Mechanical command, harness, path, or scheduling problems remain inside the project
+or control task when existing authority can resolve them. They do not justify an
+owner notification, an empty wait, or repeated status chatter. Unknown state is not
+an owner action; obtain the one decision-changing readback first.
+
 ## Writer leases and concurrency
 
 - Keep at most one writer lease per project. A product director, engineer, or QA
@@ -281,6 +295,37 @@ For renewal or migration:
 5. Give the successor fresh admission for its project action, send
    `MIGRATION_COMPLETE` with archive and writer-transfer readback, clear the target,
    and release the lock before selecting another migration.
+
+### Conditional cross-host relocation request
+
+A user's willingness to consider a move from one named host to another authorizes
+only a proposal. It is not a host-change, task-create, writer-transfer, or migration
+authorization. Prefer the same-host renewal sequence above.
+
+Propose `CROSS_HOST_MIGRATION_REQUEST_V1` only when executor-owned evidence proves
+that the source host blocks the exact next admitted project action, ordinary
+same-host recovery is non-viable, and the target host plus exact target path is
+authoritatively available and would materially remove that blocker. The request
+must name:
+
+- exact project ID and current task ID;
+- source host, root/worktree, terminal blocker, and evidence IDs;
+- target host and exact target root/worktree path;
+- frozen model/thinking, role, writer lease, candidate identity, and retained
+  checkpoint;
+- every worktree and retained-evidence byte that must stay preserved, including any
+  required cross-host carrier and hashes;
+- sole migration-controller ID, single-lock requirement, HANDOFF_ONLY state, and
+  first-nonzero stop conditions;
+- rollback destination and proof that the source task/worktree/evidence remain
+  recoverable until target acceptance.
+
+An unknown target path, speculative performance benefit, ordinary latency, idle
+state, opaque queue, or merely available capacity makes the request `BLOCKED` or
+`NOT_REQUIRED`. Route the packet through the owner liaison and wait for a new exact
+user authorization. Before that authorization, do not acquire the lock, create or
+move a task, transfer a writer lease, copy project bytes, archive anything, or treat
+the target host as admitted evidence.
 
 Never delete parallel or ambiguous successors to hide a topology conflict. Freeze
 them at `handoff_only` and let the migration controller converge them serially.

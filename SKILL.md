@@ -61,6 +61,21 @@ host identity, or evidence boundaries.
    obtain `HANDOFF_ACCEPTED`, transfer the writer lease exactly once, and recoverably
    archive the preserved old task. Never delete the old task/worktree/evidence or
    create a duplicate successor for the same target.
+   Treat willingness to consider moving a project between hosts as permission to
+   propose one exact request, not authority to move it. Prefer same-host recovery.
+   A cross-host request is eligible only when executor-owned evidence proves the
+   current host blocks the next admitted project action and the proposed target host
+   plus exact path can materially remove that blocker. Route the exact project/task,
+   source-host blocker, target host/path, frozen model/thinking, writer/candidate,
+   retained worktree/evidence, byte-preservation plan, single-lock plan, and rollback
+   plan through the owner liaison. Without a new exact user authorization, do not
+   change host, create a replacement, transfer the writer, or acquire the lock.
+   When a real blocker needs user judgment, a choice, login, desktop action, host
+   migration, or another owner-only action, notify the user promptly through the
+   owner liaison. State the exact blocker, why authorized automation cannot resolve
+   it, the smallest options, the recommendation, and the next step; never wait
+   silently. Resolve mechanical, path, harness, and scheduling issues internally
+   when existing authority suffices, without sending low-value owner messages.
 4. Before dispatch or mutation, evaluate the action against runtime readback. Use
    `scripts/portfolio_control.py admit` when the action crosses hosts, writes a
    repository, changes external state, or resumes after uncertain context.
