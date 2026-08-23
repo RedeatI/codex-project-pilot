@@ -50,6 +50,14 @@ context warnings auditable. Scheduling emits one deduplicated renewal recommenda
 to the sole migration controller; it never migrates a task based on a fixed number
 of compactions or an invented token threshold.
 
+Authorized stuck-thread recovery remains fail-closed. Waiting, ordinary latency,
+one idle turn, and unknown state are not proof of a stuck task. Only the sole
+migration controller may act after authoritative identity/blocker evidence, a fresh
+materially-different admission, and the global migration lock. The provisional
+successor stays `HANDOFF_ONLY` until `HANDOFF_ACCEPTED`; only then may the writer
+lease transfer and the preserved old task be recoverably archived. Old tasks,
+worktrees, and retained evidence are never deleted.
+
 Control-lifecycle readbacks distinguish a finished turn from a finished portfolio.
 An active running monitor must renew a machine-auditable work lease with admission,
 dispatch, ledger delta, or terminal evidence. Plans and timestamp-only snapshots do

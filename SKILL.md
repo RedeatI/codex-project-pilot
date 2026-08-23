@@ -52,6 +52,15 @@ host identity, or evidence boundaries.
    short/accurate/usable. If renewal is required, notify the sole migration
    controller once; never use a fixed compaction count or let scheduling launch the
    migration.
+   A user authorization for stuck-thread recovery is conditional, not a blanket
+   create/archive permission. `waiting`, ordinary latency, one idle turn, and unknown
+   state are not `stuck`. Require executor-owned proof of the exact old task, host,
+   root/worktree, frozen model/thinking, retained checkpoint, and terminal blocker.
+   Only the sole migration controller may acquire the one global lock, create one
+   provisional `HANDOFF_ONLY` successor under a materially different fresh admission,
+   obtain `HANDOFF_ACCEPTED`, transfer the writer lease exactly once, and recoverably
+   archive the preserved old task. Never delete the old task/worktree/evidence or
+   create a duplicate successor for the same target.
 4. Before dispatch or mutation, evaluate the action against runtime readback. Use
    `scripts/portfolio_control.py admit` when the action crosses hosts, writes a
    repository, changes external state, or resumes after uncertain context.
@@ -65,7 +74,7 @@ host identity, or evidence boundaries.
    release state.
 5. Dispatch long contracts that cover safe preflight through verification. Include
    explicit stopping conditions and require final readback rather than frequent
-   status chatter. Use `PROJECT_TASK_CONTRACT_V2_1`; do not interpret permission to
+   status chatter. Use `PROJECT_TASK_CONTRACT_V2_2`; do not interpret permission to
    continue as deploy, release, credential, production-data, or destructive authority.
    Default to delivery-first staging: finish core functionality, integration, and
    acceptance evidence before non-blocking deep security research. Record deferred

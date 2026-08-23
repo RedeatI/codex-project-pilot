@@ -1,13 +1,13 @@
 # Project task prompt contract
 
-Contract version: `PROJECT_TASK_CONTRACT_V2_1`
+Contract version: `PROJECT_TASK_CONTRACT_V2_2`
 Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
 
 Use this compact contract for a project implementation task. Root uses a separate
 control-only contract and must not execute these project steps.
 
 ```text
-PROJECT_TASK_CONTRACT_V2_1
+PROJECT_TASK_CONTRACT_V2_2
 PROJECT=<stable project id>
 ACTION_ID=<fresh exact action id>
 PROJECT_TASK_ID=<existing independent task id>
@@ -22,6 +22,7 @@ OUTCOME=<smallest independently state-changing result>
 DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SECURITY
 EXCLUSIONS=<explicitly forbidden work and external effects>
 EXPECTED_READBACK=<exact artifacts, commands, SHAs, or runtime fields>
+MIGRATION_STATE=NOT_REQUIRED|RECOMMENDED|HANDOFF_ONLY|ACCEPTED
 
 ROLE_BOUNDARY
 - Root performs admission, authority, priority, stop-condition, conflict, major
@@ -66,6 +67,19 @@ a still-valid readback. Re-read only when state changed, prior evidence became s
 in a decision-relevant way, a bounded wait became due, or a mandatory final gate has
 not yet been proved. Prefer one high-information validation over many narrow checks.
 
+THREAD_RECOVERY_BOUNDARY
+- This project task does not self-migrate, archive itself, or create a successor.
+- Report STUCK only with authoritative exact task/host/root-worktree/model-thinking,
+  retained-evidence, writer/candidate, terminal-blocker, and non-waiting evidence.
+  Waiting, ordinary latency, a transient failure, idle, and unknown state are not STUCK.
+- Send one deduplicated MIGRATION_RECOMMENDED packet to the sole controller. The
+  controller alone acquires the global lock and creates or selects one non-writer
+  HANDOFF_ONLY successor on the same host/role/model/thinking.
+- Preserve the old task, worktree, and retained evidence. Writer transfer and old-task
+  recoverable archive occur only after HANDOFF_ACCEPTED. Never delete or duplicate.
+- The successor needs fresh admission for its materially different project action
+  and obeys first-nonzero stopping.
+
 FORMAL_CHAIN
 Run only applicable gates in order:
 evidence -> focused test -> build -> diff/scope/secret check -> readback -> commit ->
@@ -90,6 +104,7 @@ DEPLOYED=TRUE|FALSE|UNPROVED
 RELEASED=TRUE|FALSE|UNPROVED
 NEXT=<one smallest action, bounded wait condition, owner decision, or NONE>
 OWNER_ACTION_REQUIRED=<minimal exact action or NONE>
+MIGRATION_READBACK=<old/new ids, fence, handoff, archive, writer transfer or NONE>
 
 Never claim completion, readiness, deployment, release, or a delivery date unless
 every required authoritative precondition and final readback is present.

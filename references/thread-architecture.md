@@ -244,6 +244,21 @@ requires an explicit summary-quality audit. Any failed summary gate requires
 next substantial action unsafe. A phase boundary or compaction count alone may be
 `watch`, but never mechanically forces renewal.
 
+### Stuck classification and authorized replacement
+
+`stuck` is stricter than `blocked`, `waiting`, or `unknown`. Executor-owned evidence
+must prove the exact old task, host, root/worktree, frozen model/thinking, retained
+checkpoint, writer/candidate identity, terminal blocking condition, and why the task
+cannot safely execute its next admitted action. A known pending event is `waiting`;
+ordinary latency, one idle turn, a recent active turn, a transient tool error, an
+opaque client queue, or unreadable/unknown state is not proof of `stuck`.
+
+Record one `STUCK_THREAD_READBACK` with the blocker evidence IDs, last safe
+checkpoint, old-task continuity facts, classification rationale, and one materially
+different successor action. Unknown canonical identity produces
+`THREAD_RENEWAL_REQUIRED` and forbids lock acquisition, successor creation, writer
+transfer, or archive.
+
 The scheduler sends exactly one compact `MIGRATION_RECOMMENDED` packet for each new
 `renewal_required` observation. It includes the target task ID, signals, failed
 summary gates, host/role/frozen settings, retained evidence, and one next action.
@@ -254,13 +269,18 @@ writer lease, or archives the old task.
 
 For renewal or migration:
 
-1. The runtime supervisor acquires the one migration lock and records one target.
-2. Create or select one provisional successor on the same host/role/settings.
-3. The successor validates a compact, short/accurate/usable handoff.
-4. Only after acceptance does the controller transfer the writer lease and archive
-   the old task.
-5. Record the readback, clear the target, and release the lock before selecting
-   another migration.
+1. The runtime supervisor obtains fresh admission for the materially different
+   migration action, acquires the one migration lock, and records one exact target
+   plus fence.
+2. Reuse a matching provisional successor or create exactly one on the same
+   host/role/model/thinking; keep it non-writer and `HANDOFF_ONLY`.
+3. Preserve the old task, worktree, candidate, and retained evidence while the
+   successor validates a compact, short/accurate/usable handoff.
+4. Only after `HANDOFF_ACCEPTED` does the controller transfer the writer lease once
+   and recoverably archive, never delete, the old task.
+5. Give the successor fresh admission for its project action, send
+   `MIGRATION_COMPLETE` with archive and writer-transfer readback, clear the target,
+   and release the lock before selecting another migration.
 
 Never delete parallel or ambiguous successors to hide a topology conflict. Freeze
 them at `handoff_only` and let the migration controller converge them serially.

@@ -121,6 +121,37 @@ project task that owns the admitted host/root/candidate and writer lease. If tha
 task is unavailable or identity cannot be proved, stop and route the blocker; never
 move execution into Root or a Root-controlled nested worker.
 
+## Stuck-thread recovery contract
+
+Recovery authorization applies only after executor-owned evidence classifies the
+exact task as `stuck`. A known pending event is `waiting`; ordinary latency, a recent
+active turn, one idle result, a transient tool error, or unreadable/unknown state is
+not `stuck`. Unknown identity routes to `THREAD_RENEWAL_REQUIRED` without acquiring
+the lock, creating a successor, or archiving anything.
+
+The stuck readback names the canonical old task ID, host, root/worktree, frozen
+model/thinking, writer and candidate identities, retained evidence checkpoint,
+blocking condition, why the current task cannot safely execute its next admitted
+action, and why the condition is not waiting or transient. The proposed successor
+action must be materially different and obtain fresh admission `ZERO` with a valid
+migration fence.
+
+Only the sole migration controller performs the migration under the one global lock:
+
+1. bind the lock to one exact old-task target and fence;
+2. reuse an existing matching provisional successor or create exactly one on the
+   same host/role/model/thinking, initially `HANDOFF_ONLY` and non-writer;
+3. preserve the old task, worktree, candidate, and retained evidence while the
+   successor checks a short/accurate/usable handoff;
+4. after `HANDOFF_ACCEPTED`, transfer the single writer lease exactly once;
+5. recoverably archive, never delete, the old task and record archive readback;
+6. require fresh project-action admission for the successor, report
+   `MIGRATION_COMPLETE`, then clear the target and release the lock.
+
+Parallel, duplicate, or ambiguous successors remain frozen at `HANDOFF_ONLY` and are
+converged serially. A first formal/native nonzero stops later migration gates as
+`UNEXECUTED`; a new attempt requires a new round and materially different action.
+
 ## Validation-value gate
 
 Before any validation, state the exact blocker it will remove or decision it will
