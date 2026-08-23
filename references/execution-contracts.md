@@ -72,7 +72,7 @@ only the smallest needed authority request.
 
 ## Continuous project progress
 
-Under a complete V2.4 autonomy block, stage completion triggers the same project
+Under a complete V2.4 or V2.5 autonomy block, stage completion triggers the same project
 owner to plan and fresh-admit the next stage-complete long contract; it does not wait
 for a portfolio root. If a single acceptance or external gate is temporarily blocked,
 the owner preserves that gate as `BLOCKED`, leaves its dependent later gates
@@ -87,6 +87,42 @@ bounded subtask only when effective capacity permits; it is counted as an execut
 unit, stays within the owner's envelope, and cannot hold another writer lease. The
 first formal/native nonzero still stops the current round, after which the owner may
 fresh-admit only a materially different recovery or independent action.
+
+## V2.5 proactive heartbeat dispatch
+
+`PROJECT_TASK_CONTRACT_V2_5` makes the heartbeat compute work instead of waiting for
+an existing fresh admission or pending wait. On every wake, read the current manifest,
+ledger head, authoritative topology, effective capacity, writer leases, and current
+task state for every manifest project. Classify each project exactly once as
+`DISPATCHED`, `ALREADY_ACTIVE`, `OWNER_BLOCKED`, `NO_SAFE_ACTION`, or
+`COMPLETE_FROZEN` and retain the evidence IDs behind that classification.
+
+When a project has a safe, already-authorized, state-changing next stage, form one
+minimum envelope with project/action/owner/host/root/scope/writer/authority/evidence/
+stop/handoff fields, fresh-admit it, and dispatch the unique owner/writer. Repeat for
+other independent projects until effective capacity is full. The end of a project
+stage immediately triggers the same computation for its next long contract. A
+project waiting on one gate must first consider feature, integration, test,
+documentation, performance, or evidence work that does not depend on that gate.
+
+One project's `OWNER_BLOCKED` or `NO_SAFE_ACTION` result never pauses the other
+projects. `global_decision=RUNNING` is mandatory when any project is dispatched or
+already active. Use global `WAITING` only after every manifest project has fresh
+evidence and none has a safe action; use `OWNER_ATTENTION` when an exact owner-only
+blocker is the last remaining route. Status-only sweeps, duplicate admissions,
+filler, repeated no-value actions, second writers, and capacity/host/root/authority/
+first-nonzero/credential/release/migration bypasses remain forbidden.
+
+Control-plane architecture failures are not ordinary project blockers. If multiple
+projects cannot start, the heartbeat cannot derive or dispatch a next stage, observed
+parallelism is anomalous, tasks remain long-idle due to control state, or governance
+conflicts with the user's goal, promptly notify the owner liaison. The packet contains
+exactly the affected projects, root cause, architecture options, recommended option,
+whether a user decision is required, and immediate safe actions. Dispatch those safe
+actions for other projects in the same wake. A single project's ordinary
+implementation or local architecture failure stays with its owner unless it reaches
+the existing major-architecture owner gate. A cross-project policy conflict that
+leaves no safe action is `OWNER_ATTENTION`, never silent `WAITING`.
 
 ## Admission
 
@@ -167,9 +203,12 @@ Set `authoritative` only from executor-owned runtime evidence. When
   tied to admission, dispatch, other evidence, or a terminal action in every
   running check. Plans,
   timestamps, topology refreshes, and no-change counters do not renew it. The first
-  empty running check routes once to the owner liaison and pauses after delivery;
-  the first empty waiting check also delivers an `INFO_ONLY` notice and obtains its
-  matching delivery-turn readback before pausing. Any pause, completion, or explicit
+  empty running check under V2.4 or older routes once to the owner liaison and pauses
+  after delivery; its first empty waiting check also delivers an `INFO_ONLY` notice
+  and obtains its matching delivery-turn readback before pausing. V2.5 instead
+  resweeps all manifest projects on the next wake and does not depend on an existing
+  action or wait; it may remain active without falsely renewing a work lease. Any
+  pause, completion, or explicit
   stop requires the same closure handshake and user-visible success notifications.
   A delivery failure forbids pausing; a later poll needs a fresh, bounded admission.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,

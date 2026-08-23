@@ -1,6 +1,6 @@
 # Project task prompt contract
 
-Contract version: `PROJECT_TASK_CONTRACT_V2_4`
+Contract version: `PROJECT_TASK_CONTRACT_V2_5`
 Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
 
 Use this compact contract for a project implementation task. In federated mode the
@@ -9,7 +9,7 @@ envelope. In legacy root mode, Root uses a separate control-only contract and mu
 not execute these project steps.
 
 ```text
-PROJECT_TASK_CONTRACT_V2_4
+PROJECT_TASK_CONTRACT_V2_5
 PROJECT=<stable project id>
 ACTION_ID=<fresh exact action id>
 PROJECT_TASK_ID=<existing independent task id>
@@ -34,6 +34,8 @@ ROUTINE_PUBLIC_NETWORK=NOT_REQUIRED|AUTHORIZED
 ROUTINE_NETWORK_ENVELOPE=<purpose; exact domains/URLs; exact write locations; credential boundary; frequency; expected evidence; stop condition>
 CONTINUOUS_PROGRESS=AUTHORIZED|NOT_REQUIRED
 INDEPENDENT_WHILE_BLOCKED=<feature|integration|test|documentation|performance|evidence|NONE>
+NEXT_STAGE_SEED=<next authorized state-changing stage or evidence needed to derive it>
+HEARTBEAT_HANDOFF=<terminal evidence IDs; blocker class; independent safe routes; next recompute trigger>
 
 ROLE_BOUNDARY
 - In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
@@ -91,6 +93,21 @@ CONTINUOUS_PROGRESS_BOUNDARY
   repeat unchanged checks, or create filler/duplicate work. A project-controlled
   helper is counted against effective capacity, stays within this owner's envelope,
   and cannot hold a second writer lease or mutate outside its exact delegated scope.
+- On every terminal outcome, return `NEXT_STAGE_SEED` and `HEARTBEAT_HANDOFF` so the
+  next wake can derive the next stage from fresh evidence. Their absence does not
+  authorize global waiting: the heartbeat must still sweep this project's current
+  task, ledger, topology, authority, and writer state and form a minimum envelope
+  when a safe action exists.
+
+CONTROL_PLANE_ESCALATION_BOUNDARY
+- Report a control-plane issue only when project progress exposes multi-project start
+  starvation, heartbeat next-stage derivation/dispatch failure, parallelism anomaly,
+  long-idle control state, or a governance conflict with the user's goal. Include
+  affected projects, root cause, architecture options, recommended option, whether a
+  user decision is required, and immediate safe actions. Other projects continue.
+- An ordinary single-project implementation, test, build, path, or harness failure is
+  not a control-plane escalation; resolve it with a materially different project-local
+  round. Major project architecture still uses the existing owner gate.
 
 ACTION_SELECTION
 - When task, host, root, writer, inputs, and authority are complete, choose one
@@ -188,6 +205,8 @@ MERGE_SHA=<sha or NONE>
 DEPLOYED=TRUE|FALSE|UNPROVED
 RELEASED=TRUE|FALSE|UNPROVED
 NEXT=<one smallest action, bounded wait condition, owner decision, or NONE>
+NEXT_STAGE_SEED=<next authorized stage or evidence needed to derive it>
+HEARTBEAT_HANDOFF=<terminal evidence IDs; blocker class; independent safe routes; recompute trigger>
 OWNER_ACTION_REQUIRED=<minimal exact action or NONE>
 MIGRATION_READBACK=<old/new ids, fence, handoff, archive, writer transfer or NONE>
 

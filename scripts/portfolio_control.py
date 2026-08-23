@@ -65,6 +65,11 @@ STAGE_CLOSEOUT_STEPS = (
 CAPACITY_CLASSES = {"baseline", "surge"}
 GOVERNANCE_MODES = {"root_controller", "federated_thin_kernel"}
 PROJECT_TASK_CONTRACT_V2_4 = "PROJECT_TASK_CONTRACT_V2_4"
+PROJECT_TASK_CONTRACT_V2_5 = "PROJECT_TASK_CONTRACT_V2_5"
+PROJECT_TASK_CONTRACT_VERSIONS = {
+    PROJECT_TASK_CONTRACT_V2_4,
+    PROJECT_TASK_CONTRACT_V2_5,
+}
 ROUTINE_PUBLIC_NETWORK_AUTHORITY = "routine_public_network"
 ROUTINE_PUBLIC_NETWORK_CATEGORIES = {
     "public_dependency_fetch",
@@ -112,6 +117,71 @@ CONTINUOUS_PROGRESS_TRUE_FIELDS = (
     "helpers_count_toward_capacity",
     "helpers_cannot_hold_writer_lease",
 )
+HEARTBEAT_PROJECT_SWEEP_TRUE_FIELDS = (
+    "enabled",
+    "evaluate_every_manifest_project",
+    "fresh_sources_required",
+    "existing_action_or_pending_wait_not_required",
+    "auto_form_minimum_envelope",
+    "auto_fresh_admit",
+    "auto_dispatch",
+    "recompute_after_terminal",
+    "blocked_project_does_not_pause_portfolio",
+    "global_wait_only_when_no_safe_action",
+)
+HEARTBEAT_PROJECT_SWEEP_CLASSIFICATIONS = {
+    "DISPATCHED",
+    "ALREADY_ACTIVE",
+    "OWNER_BLOCKED",
+    "NO_SAFE_ACTION",
+    "COMPLETE_FROZEN",
+}
+HEARTBEAT_PROJECT_SWEEP_SAFE_CLASSIFICATIONS = {
+    "DISPATCHED",
+    "ALREADY_ACTIVE",
+}
+HEARTBEAT_PROJECT_SWEEP_GLOBAL_DECISIONS = {
+    "RUNNING",
+    "WAITING",
+    "OWNER_ATTENTION",
+}
+HEARTBEAT_PROJECT_SWEEP_ENVELOPE_FIELDS = {
+    "project_id",
+    "action_id",
+    "owner_task_id",
+    "host_id",
+    "root",
+    "scope",
+    "writer_lease",
+    "authorities",
+    "expected_evidence",
+    "stop_condition",
+    "next_handoff",
+}
+CONTROL_PLANE_ESCALATION_TRIGGERS = {
+    "MULTI_PROJECT_START_FAILURE",
+    "HEARTBEAT_NEXT_STAGE_DERIVATION_FAILURE",
+    "HEARTBEAT_DISPATCH_FAILURE",
+    "PARALLELISM_ANOMALY",
+    "TASKS_LONG_IDLE",
+    "GOVERNANCE_GOAL_CONFLICT",
+}
+CONTROL_PLANE_PROJECT_ISSUES = {
+    "START_FAILURE",
+    "NEXT_STAGE_DERIVATION_FAILURE",
+    "DISPATCH_FAILURE",
+    "PARALLELISM_ANOMALY",
+    "LONG_IDLE",
+    "GOVERNANCE_GOAL_CONFLICT",
+}
+CONTROL_PLANE_ESCALATION_PACKET_FIELDS = {
+    "affected_projects",
+    "root_cause",
+    "architecture_options",
+    "recommended_option",
+    "user_decision_required",
+    "immediate_safe_actions",
+}
 FEDERATED_SCHEDULER_ALLOWED_AUTHORITIES = {
     "control_read",
     "manifest_read",
@@ -295,9 +365,10 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
     )
     if errors:
         return errors
-    if value["contract_version"] != PROJECT_TASK_CONTRACT_V2_4:
+    contract_version = value["contract_version"]
+    if contract_version not in PROJECT_TASK_CONTRACT_VERSIONS:
         errors.append(
-            f"{context}: contract_version must be {PROJECT_TASK_CONTRACT_V2_4}"
+            f"{context}: contract_version must be {PROJECT_TASK_CONTRACT_V2_4} or {PROJECT_TASK_CONTRACT_V2_5}"
         )
     network = value["routine_public_network"]
     network_context = f"{context}.routine_public_network"
@@ -326,7 +397,7 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
             or set(allowed_categories) != ROUTINE_PUBLIC_NETWORK_CATEGORIES
         ):
             errors.append(
-                f"{network_context}: allowed_categories must list the exact V2_4 routine public network categories"
+                f"{network_context}: allowed_categories must list the exact routine public network categories"
             )
         minimum_envelope_fields = network.get("minimum_envelope_fields")
         if (
@@ -334,7 +405,7 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
             or set(minimum_envelope_fields) != ROUTINE_PUBLIC_NETWORK_ENVELOPE_FIELDS
         ):
             errors.append(
-                f"{network_context}: minimum_envelope_fields must list the exact V2_4 envelope"
+                f"{network_context}: minimum_envelope_fields must list the exact routine public network envelope"
             )
         if network.get("credentials_allowed") is not False:
             errors.append(f"{network_context}: credentials_allowed must be false")
@@ -367,7 +438,7 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
             != CONTINUOUS_PROGRESS_INDEPENDENT_WORK_CATEGORIES
         ):
             errors.append(
-                f"{continuous_context}: independent_work_categories must list the exact V2_4 categories"
+                f"{continuous_context}: independent_work_categories must list the exact continuous-progress categories"
             )
     owner_gate_categories = value["owner_gate_categories"]
     if (
@@ -375,7 +446,7 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
         or set(owner_gate_categories) != PROJECT_OWNER_GATE_CATEGORIES
     ):
         errors.append(
-            f"{context}: owner_gate_categories must list the exact V2_4 owner gates"
+            f"{context}: owner_gate_categories must list the exact owner gates"
         )
     if value["first_nonzero_stops_round"] is not True:
         errors.append(f"{context}: first_nonzero_stops_round must be true")
@@ -383,6 +454,101 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
         errors.append(
             f"{context}: fresh_round_requires_material_difference must be true"
         )
+    heartbeat_sweep = value.get("heartbeat_project_sweep")
+    if contract_version == PROJECT_TASK_CONTRACT_V2_5 and heartbeat_sweep is None:
+        errors.append(
+            f"{context}: {PROJECT_TASK_CONTRACT_V2_5} requires heartbeat_project_sweep"
+        )
+    if heartbeat_sweep is not None:
+        sweep_context = f"{context}.heartbeat_project_sweep"
+        if not isinstance(heartbeat_sweep, dict):
+            errors.append(f"{sweep_context}: must be an object")
+        else:
+            errors.extend(
+                require_fields(
+                    heartbeat_sweep,
+                    [
+                        *HEARTBEAT_PROJECT_SWEEP_TRUE_FIELDS,
+                        "classifications",
+                        "minimum_envelope_fields",
+                        "control_plane_escalation",
+                    ],
+                    sweep_context,
+                )
+            )
+            for field in HEARTBEAT_PROJECT_SWEEP_TRUE_FIELDS:
+                if field in heartbeat_sweep and heartbeat_sweep[field] is not True:
+                    errors.append(f"{sweep_context}: {field} must be true")
+            classifications = heartbeat_sweep.get("classifications")
+            if (
+                not is_string_list(classifications)
+                or len(classifications) != len(set(classifications or []))
+                or set(classifications) != HEARTBEAT_PROJECT_SWEEP_CLASSIFICATIONS
+            ):
+                errors.append(
+                    f"{sweep_context}: classifications must list the exact V2_5 project sweep classifications"
+                )
+            minimum_envelope_fields = heartbeat_sweep.get(
+                "minimum_envelope_fields"
+            )
+            if (
+                not is_string_list(minimum_envelope_fields)
+                or len(minimum_envelope_fields)
+                != len(set(minimum_envelope_fields or []))
+                or set(minimum_envelope_fields)
+                != HEARTBEAT_PROJECT_SWEEP_ENVELOPE_FIELDS
+            ):
+                errors.append(
+                    f"{sweep_context}: minimum_envelope_fields must list the exact V2_5 dispatch envelope"
+                )
+            escalation = heartbeat_sweep.get("control_plane_escalation")
+            escalation_context = f"{sweep_context}.control_plane_escalation"
+            if not isinstance(escalation, dict):
+                errors.append(f"{escalation_context}: must be an object")
+            else:
+                errors.extend(
+                    require_fields(
+                        escalation,
+                        [
+                            "enabled",
+                            "trigger_categories",
+                            "notification_fields",
+                            "continue_other_projects",
+                            "ordinary_single_project_failure_is_project_local",
+                            "major_project_architecture_remains_owner_gate",
+                        ],
+                        escalation_context,
+                    )
+                )
+                for field in (
+                    "enabled",
+                    "continue_other_projects",
+                    "ordinary_single_project_failure_is_project_local",
+                    "major_project_architecture_remains_owner_gate",
+                ):
+                    if field in escalation and escalation[field] is not True:
+                        errors.append(f"{escalation_context}: {field} must be true")
+                trigger_categories = escalation.get("trigger_categories")
+                if (
+                    not is_string_list(trigger_categories)
+                    or len(trigger_categories)
+                    != len(set(trigger_categories or []))
+                    or set(trigger_categories) != CONTROL_PLANE_ESCALATION_TRIGGERS
+                ):
+                    errors.append(
+                        f"{escalation_context}: trigger_categories must list the exact V2_5 control-plane triggers"
+                    )
+                notification_fields = escalation.get("notification_fields")
+                if (
+                    not is_string_list(notification_fields)
+                    or len(notification_fields)
+                    != len(set(notification_fields or []))
+                    or set(notification_fields)
+                    != CONTROL_PLANE_ESCALATION_PACKET_FIELDS
+                ):
+                    errors.append(
+                        f"{escalation_context}: notification_fields must list the exact V2_5 owner-liaison packet"
+                    )
     return errors
 
 
@@ -498,7 +664,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             and not project_owner_autonomy_present
         ):
             errors.append(
-                f"{context}: {ROUTINE_PUBLIC_NETWORK_AUTHORITY} requires policy.project_owner_autonomy {PROJECT_TASK_CONTRACT_V2_4}"
+                f"{context}: {ROUTINE_PUBLIC_NETWORK_AUTHORITY} requires policy.project_owner_autonomy {PROJECT_TASK_CONTRACT_V2_4} or {PROJECT_TASK_CONTRACT_V2_5}"
             )
         owner_task_id = project["owner_task_id"]
         if owner_task_id is not None and not is_non_empty_string(owner_task_id):
@@ -528,6 +694,279 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     return errors
 
 
+def validate_heartbeat_project_sweep(value: Any) -> list[str]:
+    context = "topology.heartbeat_project_sweep"
+    if not isinstance(value, dict):
+        return [f"{context}: must be an object"]
+    required = [
+        "sweep_id",
+        "observed_at_utc",
+        "source_evidence",
+        "project_results",
+        "control_plane_escalation",
+        "global_decision",
+    ]
+    errors = require_fields(value, required, context)
+    if errors:
+        return errors
+    for field in ("sweep_id", "observed_at_utc"):
+        if not is_non_empty_string(value[field]):
+            errors.append(f"{context}: {field} must be a non-empty string")
+
+    source = value["source_evidence"]
+    source_context = f"{context}.source_evidence"
+    if not isinstance(source, dict):
+        errors.append(f"{source_context}: must be an object")
+    else:
+        source_fields = [
+            "manifest_sha256",
+            "ledger_head_seq",
+            "topology_evidence_id",
+            "task_readback_ids",
+        ]
+        errors.extend(require_fields(source, source_fields, source_context))
+        if "manifest_sha256" in source and not is_lower_hex(
+            source["manifest_sha256"], 64
+        ):
+            errors.append(
+                f"{source_context}: manifest_sha256 must be 64 lowercase hex characters"
+            )
+        ledger_head_seq = source.get("ledger_head_seq")
+        if (
+            not isinstance(ledger_head_seq, int)
+            or isinstance(ledger_head_seq, bool)
+            or ledger_head_seq < 0
+        ):
+            errors.append(
+                f"{source_context}: ledger_head_seq must be a non-negative integer"
+            )
+        if not is_non_empty_string(source.get("topology_evidence_id")):
+            errors.append(
+                f"{source_context}: topology_evidence_id must be a non-empty string"
+            )
+        task_readback_ids = source.get("task_readback_ids")
+        if not isinstance(task_readback_ids, dict) or not task_readback_ids:
+            errors.append(
+                f"{source_context}: task_readback_ids must be a non-empty object"
+            )
+        elif not all(
+            is_non_empty_string(project_id) and is_non_empty_string(evidence_id)
+            for project_id, evidence_id in task_readback_ids.items()
+        ):
+            errors.append(
+                f"{source_context}: task_readback_ids must map non-empty project IDs to non-empty evidence IDs"
+            )
+
+    project_results = value["project_results"]
+    seen_projects: set[str] = set()
+    safe_action_count = 0
+    owner_blocker_count = 0
+    control_plane_issue_projects: set[str] = set()
+    if not isinstance(project_results, list) or not project_results:
+        errors.append(f"{context}: project_results must be a non-empty array")
+    else:
+        result_fields = [
+            "project_id",
+            "classification",
+            "action_id",
+            "admission_id",
+            "dispatched_task_id",
+            "owner_blocker_id",
+            "reason",
+            "evidence_ids",
+            "control_plane_issue",
+        ]
+        for index, result in enumerate(project_results):
+            result_context = f"{context}.project_results[{index}]"
+            if not isinstance(result, dict):
+                errors.append(f"{result_context}: must be an object")
+                continue
+            errors.extend(require_fields(result, result_fields, result_context))
+            if any(field not in result for field in result_fields):
+                continue
+            project_id = result["project_id"]
+            if not is_non_empty_string(project_id):
+                errors.append(f"{result_context}: project_id must be non-empty")
+            elif project_id in seen_projects:
+                errors.append(
+                    f"{result_context}: duplicate project_id {project_id}"
+                )
+            else:
+                seen_projects.add(project_id)
+            classification = result["classification"]
+            if not is_enum_value(
+                classification, HEARTBEAT_PROJECT_SWEEP_CLASSIFICATIONS
+            ):
+                errors.append(f"{result_context}: classification is invalid")
+                continue
+            control_plane_issue = result["control_plane_issue"]
+            if control_plane_issue is not None and not is_enum_value(
+                control_plane_issue, CONTROL_PLANE_PROJECT_ISSUES
+            ):
+                errors.append(f"{result_context}: control_plane_issue is invalid")
+            elif control_plane_issue is not None and is_non_empty_string(project_id):
+                control_plane_issue_projects.add(project_id)
+            for field in (
+                "action_id",
+                "admission_id",
+                "dispatched_task_id",
+                "owner_blocker_id",
+            ):
+                field_value = result[field]
+                if field_value is not None and not is_non_empty_string(field_value):
+                    errors.append(
+                        f"{result_context}: {field} must be null or a non-empty string"
+                    )
+            if not is_non_empty_string(result["reason"]):
+                errors.append(f"{result_context}: reason must be non-empty")
+            if (
+                not is_string_list(result["evidence_ids"])
+                or not result["evidence_ids"]
+                or len(result["evidence_ids"]) != len(set(result["evidence_ids"]))
+            ):
+                errors.append(
+                    f"{result_context}: evidence_ids must be a non-empty unique string array"
+                )
+            if classification == "DISPATCHED":
+                safe_action_count += 1
+                for field in ("action_id", "admission_id", "dispatched_task_id"):
+                    if not is_non_empty_string(result[field]):
+                        errors.append(
+                            f"{result_context}: DISPATCHED requires {field}"
+                        )
+                if result["owner_blocker_id"] is not None:
+                    errors.append(
+                        f"{result_context}: DISPATCHED cannot carry owner_blocker_id"
+                    )
+            elif classification == "ALREADY_ACTIVE":
+                safe_action_count += 1
+                for field in ("action_id", "dispatched_task_id"):
+                    if not is_non_empty_string(result[field]):
+                        errors.append(
+                            f"{result_context}: ALREADY_ACTIVE requires {field}"
+                        )
+                if result["owner_blocker_id"] is not None:
+                    errors.append(
+                        f"{result_context}: ALREADY_ACTIVE cannot carry owner_blocker_id"
+                    )
+            elif classification == "OWNER_BLOCKED":
+                owner_blocker_count += 1
+                if not is_non_empty_string(result["owner_blocker_id"]):
+                    errors.append(
+                        f"{result_context}: OWNER_BLOCKED requires owner_blocker_id"
+                    )
+                if any(
+                    result[field] is not None
+                    for field in ("action_id", "admission_id", "dispatched_task_id")
+                ):
+                    errors.append(
+                        f"{result_context}: OWNER_BLOCKED cannot carry action or dispatch IDs"
+                    )
+            elif any(
+                result[field] is not None
+                for field in (
+                    "action_id",
+                    "admission_id",
+                    "dispatched_task_id",
+                    "owner_blocker_id",
+                )
+            ):
+                errors.append(
+                    f"{result_context}: {classification} cannot carry action, dispatch, or blocker IDs"
+                )
+
+    escalation = value["control_plane_escalation"]
+    if escalation is not None and not isinstance(escalation, dict):
+        errors.append(
+            f"{context}: control_plane_escalation must be null or an object"
+        )
+    elif isinstance(escalation, dict):
+        escalation_context = f"{context}.control_plane_escalation"
+        packet_fields = ["trigger", *sorted(CONTROL_PLANE_ESCALATION_PACKET_FIELDS)]
+        errors.extend(require_fields(escalation, packet_fields, escalation_context))
+        if not is_enum_value(
+            escalation.get("trigger"), CONTROL_PLANE_ESCALATION_TRIGGERS
+        ):
+            errors.append(f"{escalation_context}: trigger is invalid")
+        affected_projects = escalation.get("affected_projects")
+        if (
+            not is_string_list(affected_projects)
+            or not affected_projects
+            or len(affected_projects) != len(set(affected_projects or []))
+        ):
+            errors.append(
+                f"{escalation_context}: affected_projects must be a non-empty unique string array"
+            )
+        elif not control_plane_issue_projects.issubset(set(affected_projects)):
+            errors.append(
+                f"{escalation_context}: affected_projects must include every project with control_plane_issue"
+            )
+        if (
+            escalation.get("trigger") == "MULTI_PROJECT_START_FAILURE"
+            and (not isinstance(affected_projects, list) or len(affected_projects) < 2)
+        ):
+            errors.append(
+                f"{escalation_context}: MULTI_PROJECT_START_FAILURE requires at least two affected projects"
+            )
+        if not is_non_empty_string(escalation.get("root_cause")):
+            errors.append(f"{escalation_context}: root_cause must be non-empty")
+        architecture_options = escalation.get("architecture_options")
+        if (
+            not is_string_list(architecture_options)
+            or len(architecture_options) < 2
+            or len(architecture_options) != len(set(architecture_options or []))
+        ):
+            errors.append(
+                f"{escalation_context}: architecture_options must contain at least two unique options"
+            )
+        if not is_non_empty_string(escalation.get("recommended_option")):
+            errors.append(
+                f"{escalation_context}: recommended_option must be non-empty"
+            )
+        if escalation.get("user_decision_required") is not True:
+            errors.append(
+                f"{escalation_context}: user_decision_required must be true"
+            )
+        immediate_safe_actions = escalation.get("immediate_safe_actions")
+        if (
+            not is_string_list(immediate_safe_actions)
+            or len(immediate_safe_actions)
+            != len(set(immediate_safe_actions or []))
+        ):
+            errors.append(
+                f"{escalation_context}: immediate_safe_actions must be a unique string array"
+            )
+        if not control_plane_issue_projects:
+            errors.append(
+                f"{escalation_context}: packet requires project control_plane_issue evidence"
+            )
+    if control_plane_issue_projects and escalation is None:
+        errors.append(
+            f"{context}: control-plane issues require a timely owner-liaison escalation packet"
+        )
+
+    global_decision = value["global_decision"]
+    if not is_enum_value(
+        global_decision, HEARTBEAT_PROJECT_SWEEP_GLOBAL_DECISIONS
+    ):
+        errors.append(f"{context}: global_decision is invalid")
+    elif safe_action_count:
+        if global_decision != "RUNNING":
+            errors.append(
+                f"{context}: a safe project action requires global_decision RUNNING"
+            )
+    elif owner_blocker_count or control_plane_issue_projects:
+        if global_decision != "OWNER_ATTENTION":
+            errors.append(
+                f"{context}: owner-only or control-plane blockers with no safe action require global_decision OWNER_ATTENTION"
+            )
+    elif global_decision != "WAITING":
+        errors.append(
+            f"{context}: no safe action and no owner-only blocker requires global_decision WAITING"
+        )
+    return errors
+
+
 def validate_topology(topology: dict[str, Any]) -> list[str]:
     errors = require_fields(
         topology,
@@ -551,6 +990,10 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
         errors.append("topology: authoritative must be boolean")
     if not is_non_empty_string(topology["observed_at_utc"]):
         errors.append("topology: observed_at_utc must be a non-empty string")
+    if "heartbeat_project_sweep" in topology:
+        errors.extend(
+            validate_heartbeat_project_sweep(topology["heartbeat_project_sweep"])
+        )
 
     policy = topology["policy"]
     role_names: set[str] = set()
@@ -1240,6 +1683,120 @@ def audit_topology(
             "NON_AUTHORITATIVE_TOPOLOGY",
             "topology audit requires executor-owned runtime readback",
         )
+    project_owner_autonomy = manifest["policy"].get("project_owner_autonomy", {})
+    contract_version = (
+        project_owner_autonomy.get("contract_version")
+        if isinstance(project_owner_autonomy, dict)
+        else None
+    )
+    heartbeat_sweep = topology.get("heartbeat_project_sweep")
+    if contract_version == PROJECT_TASK_CONTRACT_V2_5:
+        if not isinstance(heartbeat_sweep, dict):
+            finding(
+                "HEARTBEAT_PROJECT_SWEEP_MISSING",
+                "V2.5 requires a fresh per-project sweep on every heartbeat",
+                expected_project_ids=sorted(projects),
+            )
+        else:
+            sweep_results = {
+                result["project_id"]: result
+                for result in heartbeat_sweep["project_results"]
+            }
+            observed_project_ids = set(sweep_results)
+            expected_project_ids = set(projects)
+            if observed_project_ids != expected_project_ids:
+                finding(
+                    "HEARTBEAT_PROJECT_SWEEP_INCOMPLETE",
+                    "every manifest project must receive exactly one heartbeat classification",
+                    missing_project_ids=sorted(
+                        expected_project_ids - observed_project_ids
+                    ),
+                    unexpected_project_ids=sorted(
+                        observed_project_ids - expected_project_ids
+                    ),
+                )
+            source_evidence = heartbeat_sweep["source_evidence"]
+            source_task_project_ids = set(source_evidence["task_readback_ids"])
+            if source_task_project_ids != expected_project_ids:
+                finding(
+                    "HEARTBEAT_PROJECT_SWEEP_TASK_READBACK_INCOMPLETE",
+                    "the sweep must derive every project decision from a fresh task readback",
+                    missing_project_ids=sorted(
+                        expected_project_ids - source_task_project_ids
+                    ),
+                    unexpected_project_ids=sorted(
+                        source_task_project_ids - expected_project_ids
+                    ),
+                )
+            expected_manifest_sha256 = sha256_text(canonical_json(manifest))
+            if source_evidence["manifest_sha256"] != expected_manifest_sha256:
+                finding(
+                    "HEARTBEAT_PROJECT_SWEEP_MANIFEST_DRIFT",
+                    "the sweep must use the audited canonical manifest",
+                    expected_manifest_sha256=expected_manifest_sha256,
+                    observed_manifest_sha256=source_evidence["manifest_sha256"],
+                )
+            if heartbeat_sweep["observed_at_utc"] != topology["observed_at_utc"]:
+                finding(
+                    "HEARTBEAT_PROJECT_SWEEP_STALE_TOPOLOGY",
+                    "the project sweep and topology must come from the same wake readback",
+                    topology_observed_at_utc=topology["observed_at_utc"],
+                    sweep_observed_at_utc=heartbeat_sweep["observed_at_utc"],
+                )
+            escalation = heartbeat_sweep["control_plane_escalation"]
+            if isinstance(escalation, dict):
+                unexpected_affected_projects = sorted(
+                    set(escalation["affected_projects"]) - expected_project_ids
+                )
+                if unexpected_affected_projects:
+                    finding(
+                        "HEARTBEAT_CONTROL_ESCALATION_PROJECT_UNKNOWN",
+                        "control-plane escalation can name only manifest projects",
+                        unexpected_project_ids=unexpected_affected_projects,
+                    )
+            for project_id in sorted(expected_project_ids & observed_project_ids):
+                result = sweep_results[project_id]
+                project = projects[project_id]
+                classification = result["classification"]
+                if (
+                    classification == "COMPLETE_FROZEN"
+                    and project["state"] not in {"complete", "frozen"}
+                ):
+                    finding(
+                        "HEARTBEAT_PROJECT_SWEEP_FALSE_COMPLETE",
+                        "COMPLETE_FROZEN requires a complete or frozen manifest project",
+                        project_id=project_id,
+                        project_state=project["state"],
+                    )
+                if classification in HEARTBEAT_PROJECT_SWEEP_SAFE_CLASSIFICATIONS:
+                    dispatched_task_id = result["dispatched_task_id"]
+                    if dispatched_task_id not in tasks:
+                        finding(
+                            "HEARTBEAT_PROJECT_SWEEP_DISPATCH_TARGET_MISSING",
+                            "a runnable classification must reference an authoritative project task",
+                            project_id=project_id,
+                            classification=classification,
+                            dispatched_task_id=dispatched_task_id,
+                        )
+                    elif tasks[dispatched_task_id]["project_id"] != project_id:
+                        finding(
+                            "HEARTBEAT_PROJECT_SWEEP_DISPATCH_TARGET_MISMATCH",
+                            "the runnable task must belong to the classified project",
+                            project_id=project_id,
+                            dispatched_task_id=dispatched_task_id,
+                            observed_project_id=tasks[dispatched_task_id]["project_id"],
+                        )
+                    if (
+                        project["owner_task_id"] is not None
+                        and dispatched_task_id != project["owner_task_id"]
+                    ):
+                        finding(
+                            "HEARTBEAT_PROJECT_SWEEP_NON_OWNER_DISPATCH",
+                            "a project sweep cannot bypass the manifest owner/writer",
+                            project_id=project_id,
+                            expected_owner_task_id=project["owner_task_id"],
+                            dispatched_task_id=dispatched_task_id,
+                        )
     for requirement, enabled in policy["dispatch_requirements"].items():
         if not enabled:
             finding(
@@ -2190,6 +2747,7 @@ def audit_topology(
             phase == "waiting"
             and lifecycle["automation_status"] == "ACTIVE"
             and lifecycle["consecutive_no_change"] >= 1
+            and contract_version != PROJECT_TASK_CONTRACT_V2_5
         ):
             finding(
                 "WAITING_AUTOMATION_NOT_PAUSED_AFTER_EMPTY_CHECK",

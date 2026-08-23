@@ -114,7 +114,7 @@ host identity, or evidence boundaries.
    readback. Include exact task, host, root, branches, owned paths, authorities,
    preserved state, explicit stopping conditions, `NOT_REQUIRED` evidence, and final
    readback. Prefer this complete stage contract to serial half-step prompts. Use
-   `PROJECT_TASK_CONTRACT_V2_4`; do not interpret permission to continue as deploy,
+   `PROJECT_TASK_CONTRACT_V2_5`; do not interpret permission to continue as deploy,
    release, credential, production-data, or destructive authority.
    Project writers may use project-controlled non-writing helpers for bounded
    diagnosis or evidence aggregation, but helpers cannot acquire a second writer
@@ -135,8 +135,8 @@ host identity, or evidence boundaries.
    Routine network authority never relaxes host/root identity, frozen settings,
    writer or migration locks, first-nonzero behavior, secret checks, or publication
    controls. Older manifests remain valid but have no routine network authority unless
-   they adopt the V2.4 policy and grant it per project.
-   A complete V2.4 autonomy block also enables continuous progress. After a stage
+   they adopt the V2.4 or V2.5 policy and grant it per project.
+   A complete V2.4 or V2.5 autonomy block also enables continuous progress. After a stage
    closes, the same project owner immediately plans and fresh-admits the next
    stage-complete long contract. If one acceptance or external gate is temporarily
    blocked, preserve it as `BLOCKED`, leave dependent later gates `UNEXECUTED`, and
@@ -145,6 +145,26 @@ host identity, or evidence boundaries.
    bypass safety/authority/publication evidence, repeat no-value work, or create
    filler. Project-controlled helpers remain bounded by effective capacity and the
    owner's envelope, and cannot acquire a second writer lease.
+   Under V2.5, every heartbeat derives current manifest, ledger, topology, capacity,
+   writer, and task evidence for every project. It does not require an existing
+   fresh-admitted action or pending wait before it can act. Classify each project as
+   `DISPATCHED`, `ALREADY_ACTIVE`, `OWNER_BLOCKED`, `NO_SAFE_ACTION`, or
+   `COMPLETE_FROZEN`; when the next stage is safe and already authorized, form the
+   minimum envelope, fresh-admit, and dispatch the unique owner/writer. Fill only
+   effective capacity with independent work. Recompute immediately after a terminal
+   stage, and never let one blocked or waiting project pause the others. Global
+   `WAITING` is valid only after the full sweep proves no safe action; route a true
+   owner-only blocker through the liaison. V2.4 manifests remain compatible but do
+   not claim a V2.5 sweep.
+   Treat multi-project start failure, heartbeat next-stage derivation or dispatch
+   failure, a parallelism anomaly, long-idle tasks caused by control state, or a
+   governance/user-goal conflict as a control-plane architecture escalation. Send a
+   timely owner-liaison packet with affected projects, root cause, architecture
+   options, recommended option, user-decision requirement, and immediate safe
+   actions; continue those safe actions for other projects. One project's ordinary
+   implementation failure stays project-local unless it crosses the existing
+   major-architecture owner gate. If a cross-project control conflict leaves no safe
+   action, use `OWNER_ATTENTION`, never silent `WAITING`.
    Default to delivery-first staging: finish core functionality, integration, and
    acceptance evidence before non-blocking deep security research. Record deferred
    research as an explicit pre-release gate. Never defer known critical/high defects,
@@ -165,8 +185,10 @@ host identity, or evidence boundaries.
    notification ID. Treat runtime idle as turn completion, not portfolio completion.
    Require each active `running` monitor to renew an evidence-backed work lease by
    admitting, dispatching, advancing ledger evidence, or recording a terminal result.
-   A plan, timestamp, topology snapshot, or no-change counter is not work. One empty
-   running check routes to attention; one empty waiting check prepares a pause.
+   A plan, timestamp, topology snapshot, or no-change counter is not work. For V2.4
+   and older contracts, one empty running check routes to attention and one empty
+   waiting check prepares a pause. V2.5 performs another complete per-project sweep
+   at the next wake without falsely renewing the work lease from the sweep itself.
    Before any pause, including `waiting`, deliver one deduplicated result or decision
    notice through the declared owner liaison, wait for its matching closure and
    delivery-turn readback, persist that delivery preceded the pause, and keep success
@@ -177,9 +199,13 @@ host identity, or evidence boundaries.
 8. Claim completion only after every requirement has authoritative evidence. Keep
    the user's full goal active when any requirement remains unproved.
 
-A heartbeat is a bounded control trigger, not progress by itself. It must perform or
-dispatch one admitted action and emit a `WORK_LEASE_READBACK`, or enter the
-owner-liaison delivery gate before stopping automation renewal in that same run.
+A heartbeat is a bounded control trigger, not progress by itself. Under V2.5 it
+classifies every manifest project and performs or dispatches every safe independent
+action that fits effective capacity; its project sweep and `WORK_LEASE_READBACK`
+record the evidence. If none exists, it records global `WAITING` or
+`OWNER_ATTENTION` and enters the owner-liaison delivery gate when required. It never
+uses a status-only sweep, filler, duplicate admission, or blocked sibling project as
+progress.
 
 Automatic advancement never implies automatic permission. Obtain explicit user
 authorization before external writes, repository publication, release, credential

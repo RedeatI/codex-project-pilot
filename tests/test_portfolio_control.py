@@ -111,6 +111,96 @@ def enable_v24_routine_public_network(manifest):
     return manifest
 
 
+def enable_v25_proactive_project_sweep(manifest):
+    manifest = enable_v24_routine_public_network(manifest)
+    autonomy = manifest["policy"]["project_owner_autonomy"]
+    autonomy["contract_version"] = "PROJECT_TASK_CONTRACT_V2_5"
+    autonomy["heartbeat_project_sweep"] = {
+        "enabled": True,
+        "evaluate_every_manifest_project": True,
+        "fresh_sources_required": True,
+        "existing_action_or_pending_wait_not_required": True,
+        "auto_form_minimum_envelope": True,
+        "auto_fresh_admit": True,
+        "auto_dispatch": True,
+        "recompute_after_terminal": True,
+        "blocked_project_does_not_pause_portfolio": True,
+        "global_wait_only_when_no_safe_action": True,
+        "classifications": [
+            "DISPATCHED",
+            "ALREADY_ACTIVE",
+            "OWNER_BLOCKED",
+            "NO_SAFE_ACTION",
+            "COMPLETE_FROZEN",
+        ],
+        "minimum_envelope_fields": [
+            "project_id",
+            "action_id",
+            "owner_task_id",
+            "host_id",
+            "root",
+            "scope",
+            "writer_lease",
+            "authorities",
+            "expected_evidence",
+            "stop_condition",
+            "next_handoff",
+        ],
+        "control_plane_escalation": {
+            "enabled": True,
+            "trigger_categories": [
+                "MULTI_PROJECT_START_FAILURE",
+                "HEARTBEAT_NEXT_STAGE_DERIVATION_FAILURE",
+                "HEARTBEAT_DISPATCH_FAILURE",
+                "PARALLELISM_ANOMALY",
+                "TASKS_LONG_IDLE",
+                "GOVERNANCE_GOAL_CONFLICT",
+            ],
+            "notification_fields": [
+                "affected_projects",
+                "root_cause",
+                "architecture_options",
+                "recommended_option",
+                "user_decision_required",
+                "immediate_safe_actions",
+            ],
+            "continue_other_projects": True,
+            "ordinary_single_project_failure_is_project_local": True,
+            "major_project_architecture_remains_owner_gate": True,
+        },
+    }
+    return manifest
+
+
+def add_v25_heartbeat_project_sweep(manifest, topology):
+    topology["heartbeat_project_sweep"] = {
+        "sweep_id": "heartbeat-sweep-20260824t000000z",
+        "observed_at_utc": topology["observed_at_utc"],
+        "source_evidence": {
+            "manifest_sha256": CONTROL.sha256_text(CONTROL.canonical_json(manifest)),
+            "ledger_head_seq": 1,
+            "topology_evidence_id": "topology-readback-20260824t000000z",
+            "task_readback_ids": {"alpha": "task-readback-alpha-1"},
+        },
+        "project_results": [
+            {
+                "project_id": "alpha",
+                "classification": "ALREADY_ACTIVE",
+                "action_id": "alpha-action-1",
+                "admission_id": "alpha-admission-1",
+                "dispatched_task_id": "alpha-owner",
+                "owner_blocker_id": None,
+                "reason": "authoritative task readback proves the admitted stage is active",
+                "evidence_ids": ["task-readback-alpha-1"],
+                "control_plane_issue": None,
+            }
+        ],
+        "control_plane_escalation": None,
+        "global_decision": "RUNNING",
+    }
+    return topology
+
+
 def valid_topology():
     root = str(Path.cwd())
     return {
@@ -328,6 +418,51 @@ class PortfolioControlTests(unittest.TestCase):
         manifest = enable_v24_routine_public_network(valid_manifest())
         self.assertEqual(CONTROL.validate_manifest(manifest), [])
 
+    def test_manifest_validation_accepts_v25_proactive_project_sweep(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_validation_keeps_v24_compatible_without_project_sweep(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        self.assertNotIn(
+            "heartbeat_project_sweep",
+            manifest["policy"]["project_owner_autonomy"],
+        )
+        self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_rejects_v25_without_proactive_project_sweep(self):
+        manifest = enable_v24_routine_public_network(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"][
+            "contract_version"
+        ] = "PROJECT_TASK_CONTRACT_V2_5"
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy: PROJECT_TASK_CONTRACT_V2_5 requires heartbeat_project_sweep",
+            errors,
+        )
+
+    def test_manifest_rejects_v25_sweep_that_waits_for_existing_action(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["policy"]["project_owner_autonomy"]["heartbeat_project_sweep"][
+            "existing_action_or_pending_wait_not_required"
+        ] = False
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy.heartbeat_project_sweep: existing_action_or_pending_wait_not_required must be true",
+            errors,
+        )
+
+    def test_manifest_rejects_v25_without_control_plane_escalation_policy(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        del manifest["policy"]["project_owner_autonomy"]["heartbeat_project_sweep"][
+            "control_plane_escalation"
+        ]
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy.heartbeat_project_sweep: missing control_plane_escalation",
+            errors,
+        )
+
     def test_manifest_validation_keeps_legacy_manifest_compatible(self):
         manifest = valid_manifest()
         self.assertNotIn("project_owner_autonomy", manifest["policy"])
@@ -339,7 +474,7 @@ class PortfolioControlTests(unittest.TestCase):
         errors = CONTROL.validate_manifest(manifest)
         self.assertTrue(
             any(
-                "routine_public_network requires policy.project_owner_autonomy PROJECT_TASK_CONTRACT_V2_4"
+                "routine_public_network requires policy.project_owner_autonomy PROJECT_TASK_CONTRACT_V2_4 or PROJECT_TASK_CONTRACT_V2_5"
                 in error
                 for error in errors
             )
@@ -361,7 +496,7 @@ class PortfolioControlTests(unittest.TestCase):
         manifest["policy"]["project_owner_autonomy"]["owner_gate_categories"].pop()
         errors = CONTROL.validate_manifest(manifest)
         self.assertIn(
-            "policy.project_owner_autonomy: owner_gate_categories must list the exact V2_4 owner gates",
+            "policy.project_owner_autonomy: owner_gate_categories must list the exact owner gates",
             errors,
         )
 
@@ -381,7 +516,7 @@ class PortfolioControlTests(unittest.TestCase):
         ].remove("performance")
         errors = CONTROL.validate_manifest(manifest)
         self.assertIn(
-            "policy.project_owner_autonomy.continuous_progress: independent_work_categories must list the exact V2_4 categories",
+            "policy.project_owner_autonomy.continuous_progress: independent_work_categories must list the exact continuous-progress categories",
             errors,
         )
 
@@ -504,6 +639,225 @@ class PortfolioControlTests(unittest.TestCase):
         self.assertEqual(result["reserved_control_slots"], 1)
         self.assertEqual(result["new_dispatch_budget"], 0)
         self.assertEqual(result["writer_counts"], {"alpha": 1})
+
+    def test_v25_topology_audit_requires_project_sweep(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        result = CONTROL.audit_topology(manifest, valid_topology())
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "HEARTBEAT_PROJECT_SWEEP_MISSING",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_v25_topology_audit_accepts_complete_fresh_project_sweep(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertTrue(result["ok"])
+
+    def test_v25_topology_validation_rejects_global_wait_with_safe_action(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        topology["heartbeat_project_sweep"]["global_decision"] = "WAITING"
+        errors = CONTROL.validate_topology(topology)
+        self.assertIn(
+            "topology.heartbeat_project_sweep: a safe project action requires global_decision RUNNING",
+            errors,
+        )
+
+    def test_v25_multi_project_dispatch_starvation_cannot_silently_wait(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        beta = copy.deepcopy(manifest["projects"][0])
+        beta.update({"id": "beta", "name": "Beta"})
+        manifest["projects"].append(beta)
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        sweep = topology["heartbeat_project_sweep"]
+        alpha_result = sweep["project_results"][0]
+        alpha_result.update(
+            {
+                "classification": "NO_SAFE_ACTION",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "control_plane_issue": "START_FAILURE",
+                "reason": "control policy prevented owner dispatch",
+            }
+        )
+        beta_result = copy.deepcopy(alpha_result)
+        beta_result.update(
+            {
+                "project_id": "beta",
+                "evidence_ids": ["task-readback-beta-1"],
+            }
+        )
+        sweep["project_results"].append(beta_result)
+        sweep["source_evidence"]["task_readback_ids"][
+            "beta"
+        ] = "task-readback-beta-1"
+        sweep["global_decision"] = "WAITING"
+        errors = CONTROL.validate_topology(topology)
+        self.assertIn(
+            "topology.heartbeat_project_sweep: control-plane issues require a timely owner-liaison escalation packet",
+            errors,
+        )
+        self.assertIn(
+            "topology.heartbeat_project_sweep: owner-only or control-plane blockers with no safe action require global_decision OWNER_ATTENTION",
+            errors,
+        )
+
+    def test_v25_one_project_ordinary_failure_does_not_trigger_control_escalation(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        sweep = topology["heartbeat_project_sweep"]
+        sweep["project_results"][0].update(
+            {
+                "classification": "NO_SAFE_ACTION",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "reason": "project-local implementation round stopped at its first nonzero",
+                "control_plane_issue": None,
+            }
+        )
+        sweep["global_decision"] = "WAITING"
+        self.assertEqual(CONTROL.validate_topology(topology), [])
+
+    def test_v25_global_policy_conflict_requires_owner_attention_packet(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        sweep = topology["heartbeat_project_sweep"]
+        sweep["project_results"][0].update(
+            {
+                "classification": "NO_SAFE_ACTION",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "reason": "governance policy conflicts with the user's project goal",
+                "control_plane_issue": "GOVERNANCE_GOAL_CONFLICT",
+            }
+        )
+        sweep["control_plane_escalation"] = {
+            "trigger": "GOVERNANCE_GOAL_CONFLICT",
+            "affected_projects": ["alpha"],
+            "root_cause": "the current control policy excludes every goal-satisfying route",
+            "architecture_options": [
+                "narrowly amend the control policy",
+                "retain policy and narrow the project goal",
+            ],
+            "recommended_option": "narrowly amend the control policy",
+            "user_decision_required": True,
+            "immediate_safe_actions": [],
+        }
+        sweep["global_decision"] = "OWNER_ATTENTION"
+        self.assertEqual(CONTROL.validate_topology(topology), [])
+
+    def test_v25_waiting_automation_stays_active_for_next_complete_sweep(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        sweep = topology["heartbeat_project_sweep"]
+        sweep["project_results"][0].update(
+            {
+                "classification": "NO_SAFE_ACTION",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "reason": "current external gate has no independent safe route",
+                "control_plane_issue": None,
+            }
+        )
+        sweep["global_decision"] = "WAITING"
+        lifecycle = topology["control_lifecycle"]
+        lifecycle.update(
+            {
+                "phase": "waiting",
+                "safe_next_action": False,
+                "pending_wait_id": "external-gate-alpha-1",
+                "consecutive_no_change": 1,
+            }
+        )
+        del lifecycle["work_lease"]
+        owner = next(
+            thread for thread in topology["threads"] if thread["task_id"] == "alpha-owner"
+        )
+        owner.update({"active_turn": False, "state": "idle"})
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertNotIn(
+            "WAITING_AUTOMATION_NOT_PAUSED_AFTER_EMPTY_CHECK",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_v25_topology_audit_requires_every_manifest_project_and_task_readback(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        beta = copy.deepcopy(manifest["projects"][0])
+        beta.update({"id": "beta", "name": "Beta", "owner_task_id": None})
+        beta["authorities"] = ["control_read", "repo_read"]
+        manifest["projects"].append(beta)
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        result = CONTROL.audit_topology(manifest, topology)
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("HEARTBEAT_PROJECT_SWEEP_INCOMPLETE", codes)
+        self.assertIn("HEARTBEAT_PROJECT_SWEEP_TASK_READBACK_INCOMPLETE", codes)
+
+    def test_v25_topology_audit_rejects_manifest_drift(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        topology["heartbeat_project_sweep"]["source_evidence"][
+            "manifest_sha256"
+        ] = "0" * 64
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertIn(
+            "HEARTBEAT_PROJECT_SWEEP_MANIFEST_DRIFT",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_v25_owner_blocked_project_does_not_pause_active_project(self):
+        manifest = enable_v25_proactive_project_sweep(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        beta = copy.deepcopy(manifest["projects"][0])
+        beta.update(
+            {
+                "id": "beta",
+                "name": "Beta",
+                "owner_task_id": None,
+                "state": "blocked",
+            }
+        )
+        beta["authorities"] = ["control_read", "repo_read"]
+        manifest["projects"].append(beta)
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        sweep = topology["heartbeat_project_sweep"]
+        sweep["source_evidence"]["task_readback_ids"][
+            "beta"
+        ] = "task-readback-beta-1"
+        sweep["project_results"].append(
+            {
+                "project_id": "beta",
+                "classification": "OWNER_BLOCKED",
+                "action_id": None,
+                "admission_id": None,
+                "dispatched_task_id": None,
+                "owner_blocker_id": "owner-request-beta-1",
+                "reason": "only a credentialed owner action can unlock this stage",
+                "evidence_ids": ["task-readback-beta-1", "owner-request-beta-1"],
+                "control_plane_issue": None,
+            }
+        )
+        sweep["source_evidence"]["manifest_sha256"] = CONTROL.sha256_text(
+            CONTROL.canonical_json(manifest)
+        )
+        result = CONTROL.audit_topology(manifest, topology)
+        heartbeat_codes = {
+            finding["code"]
+            for finding in result["findings"]
+            if finding["code"].startswith("HEARTBEAT_PROJECT_SWEEP")
+        }
+        self.assertEqual(heartbeat_codes, set())
+        self.assertEqual(sweep["global_decision"], "RUNNING")
 
     def test_topology_audit_accepts_federated_thin_kernel(self):
         manifest = valid_manifest()

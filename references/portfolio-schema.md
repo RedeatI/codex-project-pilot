@@ -17,7 +17,7 @@ or production data in it.
     "default_repo_visibility": "private",
     "external_mutations_require_user_authorization": true,
     "project_owner_autonomy": {
-      "contract_version": "PROJECT_TASK_CONTRACT_V2_4",
+      "contract_version": "PROJECT_TASK_CONTRACT_V2_5",
       "routine_public_network": {
         "authority": "routine_public_network",
         "allowed_categories": [
@@ -57,6 +57,60 @@ or production data in it.
         "project_controlled_helpers_allowed": true,
         "helpers_count_toward_capacity": true,
         "helpers_cannot_hold_writer_lease": true
+      },
+      "heartbeat_project_sweep": {
+        "enabled": true,
+        "evaluate_every_manifest_project": true,
+        "fresh_sources_required": true,
+        "existing_action_or_pending_wait_not_required": true,
+        "auto_form_minimum_envelope": true,
+        "auto_fresh_admit": true,
+        "auto_dispatch": true,
+        "recompute_after_terminal": true,
+        "blocked_project_does_not_pause_portfolio": true,
+        "global_wait_only_when_no_safe_action": true,
+        "classifications": [
+          "DISPATCHED",
+          "ALREADY_ACTIVE",
+          "OWNER_BLOCKED",
+          "NO_SAFE_ACTION",
+          "COMPLETE_FROZEN"
+        ],
+        "minimum_envelope_fields": [
+          "project_id",
+          "action_id",
+          "owner_task_id",
+          "host_id",
+          "root",
+          "scope",
+          "writer_lease",
+          "authorities",
+          "expected_evidence",
+          "stop_condition",
+          "next_handoff"
+        ],
+        "control_plane_escalation": {
+          "enabled": true,
+          "trigger_categories": [
+            "MULTI_PROJECT_START_FAILURE",
+            "HEARTBEAT_NEXT_STAGE_DERIVATION_FAILURE",
+            "HEARTBEAT_DISPATCH_FAILURE",
+            "PARALLELISM_ANOMALY",
+            "TASKS_LONG_IDLE",
+            "GOVERNANCE_GOAL_CONFLICT"
+          ],
+          "notification_fields": [
+            "affected_projects",
+            "root_cause",
+            "architecture_options",
+            "recommended_option",
+            "user_decision_required",
+            "immediate_safe_actions"
+          ],
+          "continue_other_projects": true,
+          "ordinary_single_project_failure_is_project_local": true,
+          "major_project_architecture_remains_owner_gate": true
+        }
       },
       "owner_gate_categories": [
         "credential_or_private_data",
@@ -114,7 +168,7 @@ or production data in it.
 - `project_owner_autonomy` is optional so manifests written before V2.4 remain
   valid. A project that uses routine public networking must explicitly include
   `routine_public_network` in its own `authorities`; that grant is invalid unless
-  the policy contains the exact `PROJECT_TASK_CONTRACT_V2_4` block shown above.
+  the policy contains a valid V2.4 or V2.5 autonomy block.
   Each network action also records the minimum envelope fields. The portfolio-level
   policy never grants the authority to every project implicitly.
 - Routine public networking is limited to public dependency retrieval, public
@@ -125,7 +179,7 @@ or production data in it.
   impact, destructive operations, publication/deployment, cross-host migration,
   material scope or dependency expansion, irreversible external writes, and major
   architecture direction remain owner gates.
-- The V2.4 `continuous_progress` block requires the same project owner to plan and
+- The V2.4/V2.5 `continuous_progress` block requires the same project owner to plan and
   fresh-admit the next long-stage contract after a stage completes. When one
   acceptance or external gate is blocked, it selects authorized work that does not
   depend on that gate from the exact feature, integration, test, documentation,
@@ -134,6 +188,25 @@ or production data in it.
   or bypasses safety, authority, publication, host, root, writer, or migration gates.
   Repeated no-value work and filler are forbidden. Project-controlled helpers are
   allowed only inside effective capacity and cannot hold a second writer lease.
+- V2.5 adds `heartbeat_project_sweep`. Every automation wake derives current task,
+  ledger, and topology evidence for every manifest project, then classifies each
+  exactly once as `DISPATCHED`, `ALREADY_ACTIVE`, `OWNER_BLOCKED`, `NO_SAFE_ACTION`,
+  or `COMPLETE_FROZEN`. An existing fresh admission or pending wait is not a
+  prerequisite: when current authority permits a state-changing next stage, the
+  scheduler forms the minimum envelope, fresh-admits it, and dispatches the unique
+  owner/writer within effective capacity. A terminal stage triggers immediate
+  recomputation. One blocked or waiting project never pauses the others. Global
+  `WAITING` is valid only when the complete sweep proves no safe action; when a true
+  owner-only blocker is the last remaining route, use `OWNER_ATTENTION`. V2.4
+  manifests remain valid but do not claim V2.5 sweep evidence.
+- V2.5 control-plane architecture escalation is distinct from a project-local
+  implementation failure. Multiple projects unable to start, heartbeat next-stage
+  derivation or dispatch failure, a parallelism anomaly, long-idle tasks, or a
+  governance/user-goal conflict requires a timely owner-liaison packet with exactly
+  `affected_projects`, `root_cause`, `architecture_options`, `recommended_option`,
+  `user_decision_required`, and `immediate_safe_actions`. Safe projects continue.
+  One project's ordinary implementation architecture remains with that owner unless
+  it crosses the existing major-architecture owner gate.
 - In federated mode, grant each owner only its project-local envelope, such as
   `project_local_decide`, `project_local_admission`, `project_execute`, and the
   exact repository/test/delivery authorities it needs. These never imply external
@@ -157,7 +230,7 @@ is complete; record the evidence that proves the desired outcome.
 Run `validate-manifest` after every manifest edit.
 
 A first formal/native nonzero still stops the current round. It does not revoke the
-project objective or its V2.4 autonomy: the same project owner may derive a fresh
+project objective or its V2.4/V2.5 autonomy: the same project owner may derive a fresh
 round only when the new action is materially different and retained evidence is
 preserved. Host, root, writer, frozen-lane, migration, publication, and credential
 gates are unchanged.

@@ -75,6 +75,21 @@ continues inside the existing authority envelope. It never fabricates acceptance
 bypasses safety or publication evidence, or creates filler and duplicate work.
 Project-controlled helpers remain capacity-counted nonwriters under the same owner.
 
+V2.5 makes heartbeat dispatch proactive. Each wake recomputes the next stage for
+every manifest project from fresh task, ledger, and topology evidence; an existing
+fresh-admitted action or pending wait is no longer the only way work can start. The
+scheduler classifies every project, forms the minimum action envelope, fresh-admits
+and dispatches each authorized independent action within effective capacity, and
+recomputes immediately after a terminal stage. One blocked or waiting project cannot
+pause the rest of the portfolio. Global waiting is valid only after the complete
+sweep proves that no project has a safe action; exact owner-only blockers are routed
+for attention. V2.4 manifests remain valid, but only V2.5 claims this auditable sweep.
+Control-plane failures that starve multiple projects, prevent next-stage derivation
+or dispatch, expose parallelism or long-idle anomalies, or conflict with the user's
+goal produce a timely architecture-options packet for the owner liaison while every
+independent safe project continues. Ordinary single-project implementation failures
+remain project-local unless they cross the major-architecture owner gate.
+
 Delivery-first staging prioritizes core implementation, integration, and acceptance
 candidates. Non-blocking deep security research may be deferred into one explicit
 pre-release gate, while known critical/high findings, authentication and permission

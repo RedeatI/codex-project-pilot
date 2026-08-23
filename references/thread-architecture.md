@@ -187,6 +187,63 @@ Federated mode uses `controller_task_id` for the scheduler; legacy mode uses
 }
 ```
 
+V2.5 topology snapshots also record the complete decision made during that wake:
+
+```json
+{
+  "heartbeat_project_sweep": {
+    "sweep_id": "portfolio-sweep-20260824t000000z",
+    "observed_at_utc": "2026-08-24T00:00:00Z",
+    "source_evidence": {
+      "manifest_sha256": "<canonical-manifest-sha256>",
+      "ledger_head_seq": 42,
+      "topology_evidence_id": "topology-readback-42",
+      "task_readback_ids": {
+        "service-a": "task-readback-service-a-42"
+      }
+    },
+    "project_results": [
+      {
+        "project_id": "service-a",
+        "classification": "DISPATCHED",
+        "action_id": "service-a-stage-8",
+        "admission_id": "service-a-stage-8-admission",
+        "dispatched_task_id": "service-a-owner",
+        "owner_blocker_id": null,
+        "reason": "fresh evidence identified an authorized next stage",
+        "evidence_ids": ["task-readback-service-a-42", "dispatch-service-a-stage-8"],
+        "control_plane_issue": null
+      }
+    ],
+    "control_plane_escalation": null,
+    "global_decision": "RUNNING"
+  }
+}
+```
+
+The sweep is not a status-only inventory. Its project IDs and task-readback keys
+must exactly equal the manifest project set, its canonical manifest hash and wake
+timestamp must match the audited inputs, and every runnable classification must
+reference the manifest owner/writer. Use `DISPATCHED` for a new admission sent in
+this wake, `ALREADY_ACTIVE` for authoritative execution already in flight,
+`OWNER_BLOCKED` only for an exact owner-only blocker, `NO_SAFE_ACTION` only after
+fresh evidence excludes every authorized independent route, and `COMPLETE_FROZEN`
+only for a manifest project already complete or intentionally frozen. Any safe
+classification forces `global_decision=RUNNING`; a blocked project cannot turn the
+global decision into `WAITING` while another project can run.
+
+Set `control_plane_issue` only when the fault is architectural to portfolio control:
+start failure across projects, next-stage derivation or dispatch failure, parallelism
+anomaly, long-idle task topology, or a governance/user-goal conflict. A non-null
+issue requires a timely `control_plane_escalation` packet naming
+`affected_projects`, `root_cause`, at least two `architecture_options`, one
+`recommended_option`, `user_decision_required=true`, and
+`immediate_safe_actions`. If any other project is runnable, keep
+`global_decision=RUNNING` and list that continuation in the packet. When no safe
+action remains, use `OWNER_ATTENTION`, never silent `WAITING`. Do not raise this
+packet for one project's ordinary implementation failure; it stays with that owner
+unless it crosses the major-architecture owner gate.
+
 Use these phases:
 
 - `running`: one authorized, admitted, safe next action exists and the current
@@ -212,8 +269,10 @@ these facts is authoritative in the current run:
 
 `none`, a proposed next action, a changed timestamp, a topology refresh, or an
 incremented no-change counter never renews the lease. A terminal action cannot be
-reused as the safe next action. Each heartbeat must execute or dispatch at most one
-bounded admitted action and finish with this readback:
+reused as the safe next action. Under V2.5, each heartbeat first sweeps every project
+and dispatches as many complete, independent actions as effective capacity permits;
+the work-lease readback names the bounded control action and the sweep records every
+project result. Older contracts dispatch one bounded admitted action. Finish with:
 
 ```text
 WORK_LEASE_READBACK
@@ -231,12 +290,15 @@ A validation inside a heartbeat also records `DECISION_UNLOCKED` and
 `NEW_EVIDENCE_EXPECTED`. An empty heartbeat, unchanged status poll, or repeated
 readback does not renew the work lease.
 
-`KEEP_ACTIVE` is valid only for `running` with a renewed work lease. One empty
-running check on an incomplete portfolio, without an identified wait or owner
-request, requires `owner_attention`; do not wake a controller again. A waiting monitor must
-prepare to pause after its first empty check. If polling is genuinely required
-later, admit one new bounded recheck at its due time; do not leave a frequent
-heartbeat active around an opaque client queue or placeholder ID.
+`KEEP_ACTIVE` is valid only for `running` with a renewed work lease. Under V2.4 and
+older contracts, one empty running check routes to attention and a waiting monitor
+prepares to pause after its first empty check. V2.5 does not treat the absence of an
+already-admitted action or pending wait as proof of idleness: the next wake performs
+a fresh complete project sweep. It may remain active while a bounded schedule is
+configured, but it must not renew a work lease from the sweep alone. If the sweep
+finds no safe action, it records `WAITING` or `OWNER_ATTENTION` and delivers the
+required notice; it must never manufacture filler, repeat an unchanged action, or
+hold a slot around an opaque queue.
 
 Every transition to `PAUSED`, including `waiting`, uses this hard exit gate:
 
