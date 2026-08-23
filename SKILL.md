@@ -50,9 +50,18 @@ host identity, or evidence boundaries.
 4. Before dispatch or mutation, evaluate the action against runtime readback. Use
    `scripts/portfolio_control.py admit` when the action crosses hosts, writes a
    repository, changes external state, or resumes after uncertain context.
+   Before every validation, name the blocker it removes or decision it changes and
+   the new evidence expected. If the result cannot change the next action, only
+   repeats still-valid evidence, or produces no new evidence, mark it `NOT_REQUIRED`
+   and do not run it. Keep mandatory safety, authority, publication, merge, release,
+   and first-time final readbacks. Prefer one high-information check over repeated
+   inspection. Treat model claims, plans, queues, static checks, local output, and
+   historical output as non-authoritative for remote, GitHub, merge, deployment, or
+   release state.
 5. Dispatch long contracts that cover safe preflight through verification. Include
    explicit stopping conditions and require final readback rather than frequent
-   status chatter.
+   status chatter. Use `PROJECT_TASK_CONTRACT_V2`; do not interpret permission to
+   continue as deploy, release, credential, production-data, or destructive authority.
 6. Monitor deltas, not full transcripts. Classify approval, missing authority,
    host mismatch, harness failure, product failure, and external-state waiting as
    different outcomes. Deduplicate context-renewal notifications by target and
@@ -87,6 +96,9 @@ use, destructive cleanup, or owner-only actions.
   [references/thread-architecture.md](references/thread-architecture.md).
 - When dispatching, recovering, migrating, or converging tasks, read
   [references/execution-contracts.md](references/execution-contracts.md).
+- When preparing a project execution prompt, read
+  [references/project-task-prompt-template.md](references/project-task-prompt-template.md)
+  and its linked Sol risk-calibration evidence.
 - When uploading or publishing repositories, read
   [references/github-publication.md](references/github-publication.md).
 

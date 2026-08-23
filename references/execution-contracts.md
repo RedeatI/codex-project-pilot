@@ -121,6 +121,23 @@ project task that owns the admitted host/root/candidate and writer lease. If tha
 task is unavailable or identity cannot be proved, stop and route the blocker; never
 move execution into Root or a Root-controlled nested worker.
 
+## Validation-value gate
+
+Before any validation, state the exact blocker it will remove or decision it will
+change, the new evidence expected, and why that evidence is required. If the result
+cannot alter the next action, merely repeats still-valid proof, or has no new evidence
+target, record `NOT_REQUIRED` and skip it. Re-read only after a decision-relevant
+state change, when evidence is stale in a way that affects routing, when a bounded
+wait becomes due, or when a mandatory safety, authority, publication, merge, release,
+or final readback remains unproved. Prefer one high-information validation to several
+low-information checks. The dispatch-ready form is in
+[project-task-prompt-template.md](project-task-prompt-template.md).
+
+Model statements, plans, queue entries, static checks, local results, and historical
+results are not proof of remote task state, GitHub state, merge, deployment, release,
+or production readiness. Record only `PASS`, `BLOCKED`, `WAITING`, `UNEXECUTED`, or
+`NOT_REQUIRED`, and never infer a launch date from incomplete evidence.
+
 ## Capacity expansion contract
 
 A request to raise portfolio concurrency changes only the configured policy ceiling.
@@ -139,10 +156,11 @@ the configured number is reachable.
 ## Stage closeout contract
 
 After a project stage reaches its intended evidence state, its project task runs one
-formal closeout chain: `evidence -> test -> build -> diff -> readback -> commit ->
-push -> merge`. Declare the exact project task, host, source branch, target branch,
-owned diff, writer lease, and whether a worktree merge is required before mutation.
-Build or merge may be `NOT_REQUIRED` only when the project contract proves why.
+formal closeout chain: `evidence -> focused test -> build -> diff/scope/secret check
+-> readback -> commit -> non-force push -> fast-forward merge -> remote/merge
+readback`. Declare the exact project task, host, source branch, target branch, owned
+diff, writer lease, and whether a worktree merge is required before mutation. Any
+gate may be `NOT_REQUIRED` only when the project contract proves why.
 
 At the first nonzero, stop immediately and mark later steps `UNEXECUTED`. Unknown
 task/host/branch identity, foreign or unowned dirty paths, and merge conflicts are

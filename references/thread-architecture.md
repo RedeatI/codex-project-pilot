@@ -92,7 +92,10 @@ project writer(s) -> runtime supervisor -> root controller
 - Close each completed stage in order: evidence, test, build, diff, readback, commit,
   push, and worktree merge. Record the exact source branch and target branch before
   mutation and read back the commit, remote, and merged-target SHAs.
-- `NOT_REQUIRED` is allowed only for build or merge with contract evidence. At the
+- Before each validation, name the decision it changes and new evidence it will
+  produce. Skip still-valid repeated checks as `NOT_REQUIRED`; preserve mandatory
+  safety, authority, publication, merge, release, and final readbacks.
+- `NOT_REQUIRED` is allowed for any inapplicable gate only with contract evidence. At the
   first `NONZERO`, mark all later steps `UNEXECUTED`. Unknown identity, foreign dirty
   paths, or a conflict sets the closeout to `stopped`; force push and force merge are
   forbidden.
@@ -182,6 +185,10 @@ EVIDENCE_IDS=<ids or NONE>
 NEXT_PHASE=RUNNING|WAITING|OWNER_ATTENTION|COMPLETE|STOPPED
 AUTOMATION_ACTION=KEEP_ACTIVE|PAUSE
 ```
+
+A validation inside a heartbeat also records `DECISION_UNLOCKED` and
+`NEW_EVIDENCE_EXPECTED`. An empty heartbeat, unchanged status poll, or repeated
+readback does not renew the work lease.
 
 `KEEP_ACTIVE` is valid only for `running` with a renewed work lease. One empty
 running check on an incomplete portfolio, without an identified wait or owner

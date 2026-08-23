@@ -32,6 +32,12 @@ diff, and readback gates followed by commit, push, worktree merge when required,
 target-branch readback. Unknown identity, foreign dirty paths, conflicts, or a first
 nonzero stop the remaining steps; force push and force merge are outside the contract.
 
+The `PROJECT_TASK_CONTRACT_V2` prompt adds a validation-value gate: before any check,
+name the blocker it removes or decision it changes and the new evidence expected.
+Skip repeated or decision-irrelevant checks while preserving required safety,
+authority, publication, merge, and release evidence. It also makes Sol-specific risk
+claims traceable instead of treating community anecdotes as facts.
+
 Optional per-task context-health readbacks make summary degradation and runtime
 context warnings auditable. Scheduling emits one deduplicated renewal recommendation
 to the sole migration controller; it never migrates a task based on a fixed number
@@ -68,6 +74,8 @@ python path\to\skill-creator\scripts\quick_validate.py .
 See `references/portfolio-schema.md` for the manifest and
 `references/thread-architecture.md` for control-plane and project-task topology.
 See `references/execution-contracts.md` for admission and convergence behavior.
+Use `references/project-task-prompt-template.md` for project-task dispatch prompts
+and `references/gpt-5p6-sol-risk-calibration.md` for the evidence classification.
 Read `references/github-publication.md` before any GitHub upload or visibility
 change.
 
