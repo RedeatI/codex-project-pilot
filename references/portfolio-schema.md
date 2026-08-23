@@ -93,6 +93,23 @@ or production data in it.
           "stop_condition",
           "next_handoff"
         ],
+        "runtime_capacity_fallback": {
+          "schema": "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1",
+          "enabled": true,
+          "applicable_when": [
+            "runtime_numeric_capacity_not_exposed",
+            "nested_active_workers_not_exposed"
+          ],
+          "max_inflight_tokens": 1,
+          "sequential": true,
+          "existing_idle_unique_owner_only": true,
+          "platform_acceptance_is_authoritative_slot_evidence": true,
+          "reread_after_each_attempt": true,
+          "rejection_stops_new_dispatch": true,
+          "task_or_worktree_creation_forbidden": true,
+          "writer_takeover_forbidden": true,
+          "filler_forbidden": true
+        },
         "control_plane_escalation": {
           "enabled": true,
           "trigger_categories": [
@@ -309,6 +326,15 @@ or production data in it.
   `WAITING` is valid only when the complete sweep proves no safe action; when a true
   owner-only blocker is the last remaining route, use `OWNER_ATTENTION`. V2.4
   manifests remain valid but do not claim V2.5 sweep evidence.
+- `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` is an explicit, optional V2.5
+  policy for runtimes that expose neither numeric hard/effective capacity nor the
+  nested-worker count. It never invents a numeric ceiling. It permits only one
+  serialized admission attempt against an existing idle unique owner, treats the
+  platform's accepted turn or explicit rejection as the slot evidence, and requires
+  a fresh active/lease readback before another attempt. A rejection ends the wave.
+  Task/worktree creation, writer takeover, filler, migration, credentials, and
+  publication remain forbidden. The fallback is invalid when either required
+  runtime signal is exposed.
 - V2.5 control-plane architecture escalation is distinct from a project-local
   implementation failure. Multiple projects unable to start, heartbeat next-stage
   derivation or dispatch failure, a parallelism anomaly, long-idle tasks, or a

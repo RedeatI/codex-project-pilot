@@ -368,6 +368,15 @@ It cannot override a smaller runtime hard limit. Persist both values and compute
 effective ceiling as their minimum; when no authoritative runtime number exists,
 record it as unknown rather than inventing a guarantee.
 
+If both numeric runtime capacity and nested-worker count are explicitly not exposed,
+an approved `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` may replace the numeric
+dispatch budget for one attempt at a time. It targets only an existing idle unique
+owner with a complete fresh action envelope. The platform's accepted turn or
+explicit rejection is the slot evidence; after either result, re-read active state
+and leases before any next attempt. A rejection stops new dispatch. Never parallelize
+these probes or use them to create tasks/worktrees, take a writer, run filler, migrate,
+use credentials, or publish/deploy.
+
 Capacity beyond the previous baseline is admitted one effective project action at a
 time. Before dispatch, prove complete input, a non-empty action ID, fresh admission
 `ZERO`, the exact independent project task, and its writer lease. Then apply the same

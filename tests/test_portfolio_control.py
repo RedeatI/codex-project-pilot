@@ -283,6 +283,30 @@ def enable_v25_proactive_project_sweep(manifest):
     return manifest
 
 
+def enable_bounded_runtime_admission_fallback(manifest):
+    manifest = enable_v25_proactive_project_sweep(manifest)
+    manifest["policy"]["project_owner_autonomy"]["heartbeat_project_sweep"][
+        "runtime_capacity_fallback"
+    ] = {
+        "schema": "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1",
+        "enabled": True,
+        "applicable_when": [
+            "runtime_numeric_capacity_not_exposed",
+            "nested_active_workers_not_exposed",
+        ],
+        "max_inflight_tokens": 1,
+        "sequential": True,
+        "existing_idle_unique_owner_only": True,
+        "platform_acceptance_is_authoritative_slot_evidence": True,
+        "reread_after_each_attempt": True,
+        "rejection_stops_new_dispatch": True,
+        "task_or_worktree_creation_forbidden": True,
+        "writer_takeover_forbidden": True,
+        "filler_forbidden": True,
+    }
+    return manifest
+
+
 def add_v25_heartbeat_project_sweep(manifest, topology):
     topology["heartbeat_project_sweep"] = {
         "sweep_id": "heartbeat-sweep-20260824t000000z",
@@ -322,6 +346,23 @@ def add_v25_heartbeat_project_sweep(manifest, topology):
         ],
         "control_plane_escalation": None,
         "global_decision": "RUNNING",
+    }
+    return topology
+
+
+def add_bounded_runtime_admission_fallback(
+    topology, *, attempts=None, candidate_order=None, applicability="APPLIED"
+):
+    topology["heartbeat_project_sweep"]["runtime_capacity_fallback"] = {
+        "schema": "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1",
+        "applicability": applicability,
+        "numeric_capacity_status": "NOT_EXPOSED",
+        "nested_worker_status": "NOT_EXPOSED",
+        "max_inflight_tokens": 1,
+        "sequential": True,
+        "candidate_order": ["alpha"] if candidate_order is None else candidate_order,
+        "token_attempts": [] if attempts is None else attempts,
+        "terminal_reason": None,
     }
     return topology
 
@@ -574,6 +615,27 @@ class PortfolioControlTests(unittest.TestCase):
     def test_manifest_validation_accepts_v25_proactive_project_sweep(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
         self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_accepts_bounded_runtime_admission_fallback(self):
+        manifest = enable_bounded_runtime_admission_fallback(valid_manifest())
+        self.assertEqual(CONTROL.validate_manifest(manifest), [])
+
+    def test_manifest_fallback_requires_single_serial_token(self):
+        manifest = enable_bounded_runtime_admission_fallback(valid_manifest())
+        fallback = manifest["policy"]["project_owner_autonomy"][
+            "heartbeat_project_sweep"
+        ]["runtime_capacity_fallback"]
+        fallback["max_inflight_tokens"] = 2
+        fallback["sequential"] = False
+        errors = CONTROL.validate_manifest(manifest)
+        self.assertIn(
+            "policy.project_owner_autonomy.heartbeat_project_sweep.runtime_capacity_fallback: max_inflight_tokens must be exactly 1",
+            errors,
+        )
+        self.assertIn(
+            "policy.project_owner_autonomy.heartbeat_project_sweep.runtime_capacity_fallback: sequential must be true",
+            errors,
+        )
 
     def test_manifest_v25_requires_unified_owner_liaison_routing(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())
@@ -926,6 +988,109 @@ class PortfolioControlTests(unittest.TestCase):
         topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
         result = CONTROL.audit_topology(manifest, topology)
         self.assertTrue(result["ok"])
+
+    def test_v25_topology_audit_accepts_bounded_runtime_admission_fallback(self):
+        manifest = enable_bounded_runtime_admission_fallback(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        topology["policy"]["max_active_turns"] = 4
+        topology["policy"]["baseline_max_active_turns"] = 4
+        add_bounded_runtime_admission_fallback(topology)
+        result = CONTROL.audit_topology(manifest, topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["numeric_new_dispatch_budget"], 1)
+        self.assertEqual(result["new_dispatch_budget"], 1)
+        self.assertTrue(result["runtime_admission_fallback_applied"])
+        self.assertEqual(
+            result["capacity_mode"],
+            "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1",
+        )
+
+    def test_v25_fallback_applied_requires_both_sources_not_exposed(self):
+        manifest = enable_bounded_runtime_admission_fallback(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        add_bounded_runtime_admission_fallback(topology)
+        topology["heartbeat_project_sweep"]["runtime_capacity_fallback"][
+            "numeric_capacity_status"
+        ] = "EXPOSED"
+        self.assertIn(
+            "topology.heartbeat_project_sweep.runtime_capacity_fallback: APPLIED requires numeric capacity and nested workers to be NOT_EXPOSED",
+            CONTROL.validate_topology(topology),
+        )
+
+    def test_v25_fallback_acceptance_must_match_owner_dispatch(self):
+        manifest = enable_bounded_runtime_admission_fallback(valid_manifest())
+        manifest["projects"][0]["owner_task_id"] = "alpha-owner"
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        result = topology["heartbeat_project_sweep"]["project_results"][0]
+        result.update(
+            {
+                "classification": "DISPATCHED",
+                "action_id": "alpha-action-2",
+                "admission_id": "alpha-admission-2",
+                "dispatched_task_id": "alpha-owner",
+            }
+        )
+        attempt = {
+            "attempt_index": 1,
+            "project_id": "alpha",
+            "action_id": "different-action",
+            "owner_task_id": "alpha-owner",
+            "pre_attempt_readback_id": "task-readback-alpha-1",
+            "pre_attempt_task_state": "idle",
+            "result": "ACCEPTED",
+            "turn_id": "alpha-turn-2",
+            "evidence_id": "runtime-token-alpha-2",
+            "post_attempt_readback_id": "task-readback-alpha-2",
+        }
+        add_bounded_runtime_admission_fallback(topology, attempts=[attempt])
+        audit = CONTROL.audit_topology(manifest, topology)
+        self.assertIn(
+            "RUNTIME_ADMISSION_FALLBACK_ACCEPTANCE_MISMATCH",
+            {finding["code"] for finding in audit["findings"]},
+        )
+
+    def test_v25_fallback_rejection_stops_later_attempts(self):
+        manifest = enable_bounded_runtime_admission_fallback(valid_manifest())
+        topology = add_v25_heartbeat_project_sweep(manifest, valid_topology())
+        attempts = [
+            {
+                "attempt_index": 1,
+                "project_id": "alpha",
+                "action_id": "alpha-action-2",
+                "owner_task_id": "alpha-owner",
+                "pre_attempt_readback_id": "task-readback-alpha-1",
+                "pre_attempt_task_state": "idle",
+                "result": "REJECTED",
+                "turn_id": None,
+                "evidence_id": "runtime-token-alpha-rejected",
+                "post_attempt_readback_id": "task-readback-alpha-rejected",
+            },
+            {
+                "attempt_index": 2,
+                "project_id": "beta",
+                "action_id": "beta-action-1",
+                "owner_task_id": "beta-owner",
+                "pre_attempt_readback_id": "task-readback-beta-1",
+                "pre_attempt_task_state": "idle",
+                "result": "UNEXECUTED",
+                "turn_id": None,
+                "evidence_id": "runtime-token-beta-unexecuted",
+                "post_attempt_readback_id": None,
+            },
+        ]
+        add_bounded_runtime_admission_fallback(
+            topology,
+            attempts=attempts,
+            candidate_order=["alpha", "beta"],
+        )
+        topology["heartbeat_project_sweep"]["runtime_capacity_fallback"][
+            "terminal_reason"
+        ] = "platform rejected the first token"
+        self.assertIn(
+            "topology.heartbeat_project_sweep.runtime_capacity_fallback: a rejected token must stop all later attempts",
+            CONTROL.validate_topology(topology),
+        )
 
     def test_v25_topology_audit_resolves_canonical_owner_request_alias(self):
         manifest = enable_v25_proactive_project_sweep(valid_manifest())

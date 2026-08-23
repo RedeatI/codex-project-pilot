@@ -149,6 +149,25 @@ HEARTBEAT_PROJECT_SWEEP_GLOBAL_DECISIONS = {
     "WAITING",
     "OWNER_ATTENTION",
 }
+RUNTIME_ADMISSION_FALLBACK_SCHEMA = "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1"
+RUNTIME_ADMISSION_FALLBACK_APPLICABLE_WHEN = {
+    "runtime_numeric_capacity_not_exposed",
+    "nested_active_workers_not_exposed",
+}
+RUNTIME_ADMISSION_FALLBACK_TRUE_FIELDS = (
+    "enabled",
+    "sequential",
+    "existing_idle_unique_owner_only",
+    "platform_acceptance_is_authoritative_slot_evidence",
+    "reread_after_each_attempt",
+    "rejection_stops_new_dispatch",
+    "task_or_worktree_creation_forbidden",
+    "writer_takeover_forbidden",
+    "filler_forbidden",
+)
+RUNTIME_ADMISSION_FALLBACK_APPLICABILITY = {"APPLIED", "NOT_APPLICABLE"}
+RUNTIME_ADMISSION_FALLBACK_SOURCE_STATES = {"EXPOSED", "NOT_EXPOSED"}
+RUNTIME_ADMISSION_TOKEN_RESULTS = {"ACCEPTED", "REJECTED", "UNEXECUTED"}
 HEARTBEAT_PROJECT_SWEEP_ENVELOPE_FIELDS = {
     "project_id",
     "action_id",
@@ -442,6 +461,189 @@ def effective_max_active_turns(policy: dict[str, Any]) -> int:
     return configured if runtime_reported is None else min(configured, runtime_reported)
 
 
+def validate_runtime_admission_fallback_policy(
+    value: Any, context: str
+) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{context}: must be an object"]
+    required = [
+        "schema",
+        "applicable_when",
+        "max_inflight_tokens",
+        *RUNTIME_ADMISSION_FALLBACK_TRUE_FIELDS,
+    ]
+    errors = require_fields(value, required, context)
+    if errors:
+        return errors
+    if value["schema"] != RUNTIME_ADMISSION_FALLBACK_SCHEMA:
+        errors.append(
+            f"{context}: schema must be {RUNTIME_ADMISSION_FALLBACK_SCHEMA}"
+        )
+    applicable_when = value["applicable_when"]
+    if (
+        not is_string_list(applicable_when)
+        or len(applicable_when) != len(set(applicable_when or []))
+        or set(applicable_when) != RUNTIME_ADMISSION_FALLBACK_APPLICABLE_WHEN
+    ):
+        errors.append(
+            f"{context}: applicable_when must list the exact not-exposed capacity conditions"
+        )
+    if value["max_inflight_tokens"] != 1:
+        errors.append(f"{context}: max_inflight_tokens must be exactly 1")
+    for field in RUNTIME_ADMISSION_FALLBACK_TRUE_FIELDS:
+        if value[field] is not True:
+            errors.append(f"{context}: {field} must be true")
+    return errors
+
+
+def validate_runtime_admission_fallback_readback(
+    value: Any, context: str
+) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{context}: must be an object"]
+    required = [
+        "schema",
+        "applicability",
+        "numeric_capacity_status",
+        "nested_worker_status",
+        "max_inflight_tokens",
+        "sequential",
+        "candidate_order",
+        "token_attempts",
+        "terminal_reason",
+    ]
+    errors = require_fields(value, required, context)
+    if errors:
+        return errors
+    if value["schema"] != RUNTIME_ADMISSION_FALLBACK_SCHEMA:
+        errors.append(
+            f"{context}: schema must be {RUNTIME_ADMISSION_FALLBACK_SCHEMA}"
+        )
+    if not is_enum_value(
+        value["applicability"], RUNTIME_ADMISSION_FALLBACK_APPLICABILITY
+    ):
+        errors.append(f"{context}: applicability is invalid")
+    for field in ("numeric_capacity_status", "nested_worker_status"):
+        if not is_enum_value(
+            value[field], RUNTIME_ADMISSION_FALLBACK_SOURCE_STATES
+        ):
+            errors.append(f"{context}: {field} is invalid")
+    if value["max_inflight_tokens"] != 1:
+        errors.append(f"{context}: max_inflight_tokens must be exactly 1")
+    if value["sequential"] is not True:
+        errors.append(f"{context}: sequential must be true")
+    if value["applicability"] == "APPLIED" and (
+        value["numeric_capacity_status"] != "NOT_EXPOSED"
+        or value["nested_worker_status"] != "NOT_EXPOSED"
+    ):
+        errors.append(
+            f"{context}: APPLIED requires numeric capacity and nested workers to be NOT_EXPOSED"
+        )
+    candidate_order = value["candidate_order"]
+    if (
+        not isinstance(candidate_order, list)
+        or not all(is_non_empty_string(item) for item in candidate_order)
+        or len(candidate_order) != len(set(candidate_order))
+    ):
+        errors.append(
+            f"{context}: candidate_order must be a unique string array"
+        )
+        candidate_order = []
+    attempts = value["token_attempts"]
+    if not isinstance(attempts, list):
+        errors.append(f"{context}: token_attempts must be an array")
+        attempts = []
+    rejected_index: int | None = None
+    seen_attempt_projects: set[str] = set()
+    for index, attempt in enumerate(attempts):
+        attempt_context = f"{context}.token_attempts[{index}]"
+        if not isinstance(attempt, dict):
+            errors.append(f"{attempt_context}: must be an object")
+            continue
+        fields = [
+            "attempt_index",
+            "project_id",
+            "action_id",
+            "owner_task_id",
+            "pre_attempt_readback_id",
+            "pre_attempt_task_state",
+            "result",
+            "turn_id",
+            "evidence_id",
+            "post_attempt_readback_id",
+        ]
+        errors.extend(require_fields(attempt, fields, attempt_context))
+        if any(field not in attempt for field in fields):
+            continue
+        if attempt["attempt_index"] != index + 1:
+            errors.append(
+                f"{attempt_context}: attempt_index must be contiguous and one-based"
+            )
+        project_id = attempt["project_id"]
+        if not is_non_empty_string(project_id):
+            errors.append(f"{attempt_context}: project_id must be non-empty")
+        elif project_id in seen_attempt_projects:
+            errors.append(f"{attempt_context}: project_id cannot be attempted twice")
+        else:
+            seen_attempt_projects.add(project_id)
+        if candidate_order and project_id not in candidate_order:
+            errors.append(
+                f"{attempt_context}: project_id must appear in candidate_order"
+            )
+        for field in (
+            "action_id",
+            "owner_task_id",
+            "pre_attempt_readback_id",
+            "evidence_id",
+        ):
+            if not is_non_empty_string(attempt[field]):
+                errors.append(f"{attempt_context}: {field} must be non-empty")
+        if attempt["pre_attempt_task_state"] != "idle":
+            errors.append(
+                f"{attempt_context}: pre_attempt_task_state must be idle"
+            )
+        if not is_enum_value(attempt["result"], RUNTIME_ADMISSION_TOKEN_RESULTS):
+            errors.append(f"{attempt_context}: result is invalid")
+            continue
+        for field in ("turn_id", "post_attempt_readback_id"):
+            if attempt[field] is not None and not is_non_empty_string(attempt[field]):
+                errors.append(
+                    f"{attempt_context}: {field} must be null or a non-empty string"
+                )
+        if attempt["result"] == "ACCEPTED" and (
+            not is_non_empty_string(attempt["turn_id"])
+            or not is_non_empty_string(attempt["post_attempt_readback_id"])
+        ):
+            errors.append(
+                f"{attempt_context}: ACCEPTED requires turn_id and post_attempt_readback_id"
+            )
+        if attempt["result"] == "REJECTED":
+            rejected_index = index
+            if not is_non_empty_string(attempt["post_attempt_readback_id"]):
+                errors.append(
+                    f"{attempt_context}: REJECTED requires post_attempt_readback_id"
+                )
+        if attempt["result"] == "UNEXECUTED" and (
+            attempt["turn_id"] is not None
+            or attempt["post_attempt_readback_id"] is not None
+        ):
+            errors.append(
+                f"{attempt_context}: UNEXECUTED cannot carry turn or post-attempt readback IDs"
+            )
+    if rejected_index is not None and rejected_index != len(attempts) - 1:
+        errors.append(f"{context}: a rejected token must stop all later attempts")
+    if value["applicability"] == "NOT_APPLICABLE" and attempts:
+        errors.append(f"{context}: NOT_APPLICABLE cannot carry token attempts")
+    terminal_reason = value["terminal_reason"]
+    if terminal_reason is not None and not is_non_empty_string(terminal_reason):
+        errors.append(
+            f"{context}: terminal_reason must be null or a non-empty string"
+        )
+    if rejected_index is not None and not is_non_empty_string(terminal_reason):
+        errors.append(f"{context}: a rejected token requires terminal_reason")
+    return errors
+
+
 def validate_project_owner_autonomy(value: Any) -> list[str]:
     context = "policy.project_owner_autonomy"
     if not isinstance(value, dict):
@@ -644,6 +846,14 @@ def validate_project_owner_autonomy(value: Any) -> list[str]:
                     errors.append(
                         f"{escalation_context}: notification_fields must list the exact V2_5 owner-liaison packet"
                     )
+            runtime_fallback = heartbeat_sweep.get("runtime_capacity_fallback")
+            if runtime_fallback is not None:
+                errors.extend(
+                    validate_runtime_admission_fallback_policy(
+                        runtime_fallback,
+                        f"{sweep_context}.runtime_capacity_fallback",
+                    )
+                )
     owner_routing = value.get("owner_liaison_routing")
     if contract_version == PROJECT_TASK_CONTRACT_V2_5 and owner_routing is None:
         errors.append(
@@ -1024,6 +1234,13 @@ def validate_heartbeat_project_sweep(value: Any) -> list[str]:
     for field in ("sweep_id", "observed_at_utc"):
         if not is_non_empty_string(value[field]):
             errors.append(f"{context}: {field} must be a non-empty string")
+    if "runtime_capacity_fallback" in value:
+        errors.extend(
+            validate_runtime_admission_fallback_readback(
+                value["runtime_capacity_fallback"],
+                f"{context}.runtime_capacity_fallback",
+            )
+        )
 
     source = value["source_evidence"]
     source_context = f"{context}.source_evidence"
@@ -2166,11 +2383,26 @@ def audit_topology(
         + policy["reserved_control_slots"]
         - baseline_limit,
     )
-    new_dispatch_budget = max(
+    numeric_new_dispatch_budget = max(
         0,
         effective_limit
         - active_execution_unit_count
         - policy["reserved_control_slots"],
+    )
+    heartbeat_sweep = topology.get("heartbeat_project_sweep")
+    fallback_readback = (
+        heartbeat_sweep.get("runtime_capacity_fallback")
+        if isinstance(heartbeat_sweep, dict)
+        else None
+    )
+    runtime_admission_fallback_applied = (
+        isinstance(fallback_readback, dict)
+        and fallback_readback.get("applicability") == "APPLIED"
+    )
+    new_dispatch_budget = (
+        min(1, numeric_new_dispatch_budget)
+        if runtime_admission_fallback_applied
+        else numeric_new_dispatch_budget
     )
     context_pressure_counts: Counter[str] = Counter()
 
@@ -2258,6 +2490,80 @@ def audit_topology(
                         "control-plane escalation can name only manifest projects",
                         unexpected_project_ids=unexpected_affected_projects,
                     )
+            heartbeat_policy = project_owner_autonomy["heartbeat_project_sweep"]
+            fallback_policy = heartbeat_policy.get("runtime_capacity_fallback")
+            fallback = heartbeat_sweep.get("runtime_capacity_fallback")
+            if fallback_policy is not None and not isinstance(fallback, dict):
+                finding(
+                    "RUNTIME_ADMISSION_FALLBACK_READBACK_MISSING",
+                    "an enabled bounded runtime admission fallback requires a fresh sweep readback",
+                )
+            elif fallback_policy is None and isinstance(fallback, dict):
+                finding(
+                    "RUNTIME_ADMISSION_FALLBACK_NOT_AUTHORIZED",
+                    "the topology cannot apply a runtime admission fallback absent from the manifest",
+                )
+            elif isinstance(fallback_policy, dict) and isinstance(fallback, dict):
+                if fallback["schema"] != fallback_policy["schema"]:
+                    finding(
+                        "RUNTIME_ADMISSION_FALLBACK_SCHEMA_MISMATCH",
+                        "manifest and topology fallback schemas must match",
+                        manifest_schema=fallback_policy["schema"],
+                        topology_schema=fallback["schema"],
+                    )
+                if fallback["max_inflight_tokens"] != fallback_policy["max_inflight_tokens"]:
+                    finding(
+                        "RUNTIME_ADMISSION_FALLBACK_TOKEN_LIMIT_MISMATCH",
+                        "topology fallback token limit must match the manifest",
+                        manifest_max_inflight_tokens=fallback_policy["max_inflight_tokens"],
+                        topology_max_inflight_tokens=fallback["max_inflight_tokens"],
+                    )
+                for attempt in fallback["token_attempts"]:
+                    project_id = attempt["project_id"]
+                    project = projects.get(project_id)
+                    if project is None:
+                        finding(
+                            "RUNTIME_ADMISSION_FALLBACK_PROJECT_UNKNOWN",
+                            "a fallback token can target only a manifest project",
+                            project_id=project_id,
+                        )
+                        continue
+                    if attempt["owner_task_id"] != project["owner_task_id"]:
+                        finding(
+                            "RUNTIME_ADMISSION_FALLBACK_NON_OWNER_TARGET",
+                            "a fallback token can target only the manifest unique owner",
+                            project_id=project_id,
+                            expected_owner_task_id=project["owner_task_id"],
+                            observed_owner_task_id=attempt["owner_task_id"],
+                        )
+                    if attempt["pre_attempt_readback_id"] != source_evidence[
+                        "task_readback_ids"
+                    ].get(project_id):
+                        finding(
+                            "RUNTIME_ADMISSION_FALLBACK_STALE_PRECHECK",
+                            "a fallback token must use the sweep's fresh idle task readback",
+                            project_id=project_id,
+                            expected_readback_id=source_evidence[
+                                "task_readback_ids"
+                            ].get(project_id),
+                            observed_readback_id=attempt[
+                                "pre_attempt_readback_id"
+                            ],
+                        )
+                    result = sweep_results.get(project_id)
+                    if attempt["result"] == "ACCEPTED" and (
+                        result is None
+                        or result["classification"] != "DISPATCHED"
+                        or result["action_id"] != attempt["action_id"]
+                        or result["dispatched_task_id"] != attempt["owner_task_id"]
+                    ):
+                        finding(
+                            "RUNTIME_ADMISSION_FALLBACK_ACCEPTANCE_MISMATCH",
+                            "an accepted token must match the DISPATCHED project result",
+                            project_id=project_id,
+                            action_id=attempt["action_id"],
+                            owner_task_id=attempt["owner_task_id"],
+                        )
             for project_id in sorted(expected_project_ids & observed_project_ids):
                 result = sweep_results[project_id]
                 project = projects[project_id]
@@ -3491,6 +3797,13 @@ def audit_topology(
         "active_surge_slot_count": len(active_surge_threads),
         "reserved_control_slots": policy["reserved_control_slots"],
         "new_dispatch_budget": new_dispatch_budget,
+        "numeric_new_dispatch_budget": numeric_new_dispatch_budget,
+        "capacity_mode": (
+            RUNTIME_ADMISSION_FALLBACK_SCHEMA
+            if runtime_admission_fallback_applied
+            else "NUMERIC_CAPACITY"
+        ),
+        "runtime_admission_fallback_applied": runtime_admission_fallback_applied,
         "stage_closeout_count": len(stage_closeouts),
         "stage_closeout_status_counts": dict(sorted(stage_closeout_status_counts.items())),
         "writer_counts": dict(sorted(writer_counts.items())),

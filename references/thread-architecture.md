@@ -226,6 +226,30 @@ V2.5 topology snapshots also record the complete decision made during that wake:
         "goal_recovery_action": null
       }
     ],
+    "runtime_capacity_fallback": {
+      "schema": "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1",
+      "applicability": "APPLIED",
+      "numeric_capacity_status": "NOT_EXPOSED",
+      "nested_worker_status": "NOT_EXPOSED",
+      "max_inflight_tokens": 1,
+      "sequential": true,
+      "candidate_order": ["service-a"],
+      "token_attempts": [
+        {
+          "attempt_index": 1,
+          "project_id": "service-a",
+          "action_id": "service-a-stage-8",
+          "owner_task_id": "service-a-owner",
+          "pre_attempt_readback_id": "task-readback-service-a-42",
+          "pre_attempt_task_state": "idle",
+          "result": "ACCEPTED",
+          "turn_id": "service-a-turn-8",
+          "evidence_id": "runtime-token-service-a-stage-8",
+          "post_attempt_readback_id": "task-readback-service-a-43"
+        }
+      ],
+      "terminal_reason": null
+    },
     "control_plane_escalation": null,
     "global_decision": "RUNNING"
   }
@@ -242,6 +266,15 @@ fresh evidence excludes every authorized independent route, and `COMPLETE_FROZEN
 only for a manifest project already complete or intentionally frozen. Any safe
 classification forces `global_decision=RUNNING`; a blocked project cannot turn the
 global decision into `WAITING` while another project can run.
+
+When the manifest enables `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1`, the sweep
+must include its fallback readback. Apply it only when both numeric capacity and the
+nested-worker count are explicitly `NOT_EXPOSED`. Attempts follow `candidate_order`,
+target only existing idle manifest owners, and are serialized with one in-flight
+token. An accepted platform turn is recorded as `DISPATCHED` with its turn and
+post-attempt readback; an explicit rejection is the last attempt in the wave. Re-read
+active turns and leases after every acceptance or rejection. This is authoritative
+per-slot admission evidence, not a guessed numeric capacity.
 
 Each result also proves which project goal it read. `goal_current_stage` and
 `goal_next_deliverable` must match the audited manifest, and the named

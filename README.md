@@ -84,6 +84,11 @@ recomputes immediately after a terminal stage. One blocked or waiting project ca
 pause the rest of the portfolio. Global waiting is valid only after the complete
 sweep proves that no project has a safe action; exact owner-only blockers are routed
 for attention. V2.4 manifests remain valid, but only V2.5 claims this auditable sweep.
+When a runtime explicitly exposes neither numeric capacity nor nested-worker count,
+an approved `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` can admit one existing idle
+unique owner at a time. Platform acceptance or rejection is the per-slot evidence;
+the scheduler re-reads active state and leases after every attempt, and any rejection
+stops the wave. The fallback never guesses a numeric cap or creates probe tasks.
 Control-plane failures that starve multiple projects, prevent next-stage derivation
 or dispatch, expose parallelism or long-idle anomalies, or conflict with the user's
 goal produce a timely architecture-options packet for the owner liaison while every

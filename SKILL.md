@@ -38,6 +38,13 @@ host identity, or evidence boundaries.
    same independent project task holding the writer lease. Never fill surge capacity
    with control roles, nested workers, empty helpers, duplicate work, or migration
    bypasses.
+   When the runtime explicitly exposes neither numeric hard/effective capacity nor
+   nested-worker count, use `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` only when
+   the manifest authorizes it. Attempt one complete action at a time against an
+   existing idle unique owner; the platform's accepted turn or explicit rejection is
+   the per-slot evidence. Re-read active state and leases after each result, and stop
+   new dispatch on any rejection. Never infer a numeric cap, probe in parallel,
+   create a task/worktree, take over a writer, or use filler for this fallback.
    Select the governance mode explicitly. In `federated_thin_kernel` mode, each
    project owner owns project-local action selection, admission, recovery, tests,
    delivery, and closeout inside its manifest authority envelope. The scheduler owns
