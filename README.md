@@ -14,6 +14,18 @@ project execution. Runtime snapshots make duplicate control roles, stale owners,
 unfenced migrations, excess active turns, and multiple project writers visible
 before they become coordination failures.
 
+High-concurrency audits count both visible active turns and nested workers, including
+workers hidden inside Root or another controller. A configurable control-slot reserve
+is subtracted before computing the new-dispatch budget, so unrelated active tasks and
+in-turn helpers cannot silently overcommit the host or starve terminal-event handling.
+Root remains a control-only role: project mutation and verification run in the
+project's independent task, with one writer lease and compact evidence or major
+decision requests returned to Root.
+Each completed stage closes in that same project task through evidence, test, build,
+diff, and readback gates followed by commit, push, worktree merge when required, and
+target-branch readback. Unknown identity, foreign dirty paths, conflicts, or a first
+nonzero stop the remaining steps; force push and force merge are outside the contract.
+
 Optional per-task context-health readbacks make summary degradation and runtime
 context warnings auditable. Scheduling emits one deduplicated renewal recommendation
 to the sole migration controller; it never migrates a task based on a fixed number

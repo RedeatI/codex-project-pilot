@@ -80,6 +80,10 @@ Set `authoritative` only from executor-owned runtime evidence. When
   [thread-architecture.md](thread-architecture.md).
 - Parallelize only independent projects with separate writers and no shared lock,
   candidate, release channel, or owner decision.
+- Before every dispatch wave, count visible active turns plus nested workers and
+  subtract the declared control-slot reserve. Project-external tasks still consume
+  host capacity. A zero budget forbids new dispatch; an unknown nested-worker count
+  is treated conservatively as zero budget until authoritative readback.
 - Use one controller and a fenced lock for task migrations or shared portfolio
   state. A successor must accept its compact handoff before the old task is
   archived.
@@ -110,6 +114,27 @@ Control-plane threads should exchange compact state, not act as parallel project
 writers. Project tasks report evidence deltas to runtime supervision; scheduling
 uses that snapshot to propose admissions; root decides only portfolio-level matters;
 owner liaison carries the minimal human action request.
+
+Root contracts stop at admission, authority, priority, stop conditions, and summary.
+Every implementation, test, build, fix, or delivery contract targets the existing
+project task that owns the admitted host/root/candidate and writer lease. If that
+task is unavailable or identity cannot be proved, stop and route the blocker; never
+move execution into Root or a Root-controlled nested worker.
+
+## Stage closeout contract
+
+After a project stage reaches its intended evidence state, its project task runs one
+formal closeout chain: `evidence -> test -> build -> diff -> readback -> commit ->
+push -> merge`. Declare the exact project task, host, source branch, target branch,
+owned diff, writer lease, and whether a worktree merge is required before mutation.
+Build or merge may be `NOT_REQUIRED` only when the project contract proves why.
+
+At the first nonzero, stop immediately and mark later steps `UNEXECUTED`. Unknown
+task/host/branch identity, foreign or unowned dirty paths, and merge conflicts are
+stop conditions. Do not change entry points, force push, force merge, discard retained
+state, or let Root complete the chain. A successful closeout records the commit SHA,
+remote SHA readback, and target-branch merge SHA; only then may the stage be reported
+complete and its writer lease released.
 
 ## Completion audit
 

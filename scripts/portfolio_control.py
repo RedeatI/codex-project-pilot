@@ -50,6 +50,18 @@ WORK_PROGRESS_KINDS = {
     "terminal",
 }
 WORK_ADMISSION_RESULTS = {"ZERO", "NONZERO", "UNEXECUTED"}
+STAGE_CLOSEOUT_STATUSES = {"in_progress", "complete", "stopped"}
+STAGE_STEP_RESULTS = {"PASS", "NOT_REQUIRED", "PENDING", "NONZERO", "UNEXECUTED"}
+STAGE_CLOSEOUT_STEPS = (
+    "evidence",
+    "test",
+    "build",
+    "diff",
+    "readback",
+    "commit",
+    "push",
+    "merge",
+)
 ADMISSION_BOOLEAN_FIELDS = {
     "external_mutation",
     "user_authorized",
@@ -225,6 +237,8 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             "observed_at_utc",
             "policy",
             "migration",
+            "nested_workers",
+            "stage_closeouts",
             "threads",
         ],
         "topology",
@@ -248,6 +262,7 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                 policy,
                 [
                     "max_active_turns",
+                    "reserved_control_slots",
                     "max_writers_per_project",
                     "control_roles",
                     "migration_controller_role",
@@ -259,6 +274,23 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
             value = policy.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
                 errors.append(f"topology.policy: {field} must be a positive integer")
+        reserved_control_slots = policy.get("reserved_control_slots")
+        if (
+            not isinstance(reserved_control_slots, int)
+            or isinstance(reserved_control_slots, bool)
+            or reserved_control_slots < 0
+        ):
+            errors.append(
+                "topology.policy: reserved_control_slots must be a non-negative integer"
+            )
+        elif (
+            isinstance(policy.get("max_active_turns"), int)
+            and not isinstance(policy.get("max_active_turns"), bool)
+            and reserved_control_slots >= policy["max_active_turns"]
+        ):
+            errors.append(
+                "topology.policy: reserved_control_slots must be less than max_active_turns"
+            )
         if not is_non_empty_string(policy.get("migration_controller_role")):
             errors.append(
                 "topology.policy: migration_controller_role must be a non-empty string"
@@ -497,6 +529,120 @@ def validate_topology(topology: dict[str, Any]) -> list[str]:
                                         f"{lease_context}: {field} must be boolean"
                                     )
 
+    nested_workers = topology["nested_workers"]
+    if not isinstance(nested_workers, list):
+        errors.append("topology: nested_workers must be an array")
+        nested_workers = []
+    seen_worker_ids: set[str] = set()
+    required_worker_fields = [
+        "worker_id",
+        "controller_task_id",
+        "project_id",
+        "host_id",
+        "active",
+        "writer",
+    ]
+    for index, worker in enumerate(nested_workers):
+        context = f"topology.nested_workers[{index}]"
+        if not isinstance(worker, dict):
+            errors.append(f"{context}: must be an object")
+            continue
+        errors.extend(require_fields(worker, required_worker_fields, context))
+        if any(field not in worker for field in required_worker_fields):
+            continue
+        for field in ("worker_id", "controller_task_id", "host_id"):
+            if not is_non_empty_string(worker[field]):
+                errors.append(f"{context}: {field} must be a non-empty string")
+        worker_id = worker["worker_id"]
+        if isinstance(worker_id, str):
+            if worker_id in seen_worker_ids:
+                errors.append(f"{context}: duplicate worker_id {worker_id}")
+            seen_worker_ids.add(worker_id)
+        project_id = worker["project_id"]
+        if project_id is not None and not is_non_empty_string(project_id):
+            errors.append(f"{context}: project_id must be null or a non-empty string")
+        for field in ("active", "writer"):
+            if not isinstance(worker[field], bool):
+                errors.append(f"{context}: {field} must be boolean")
+
+    stage_closeouts = topology["stage_closeouts"]
+    if not isinstance(stage_closeouts, list):
+        errors.append("topology: stage_closeouts must be an array")
+        stage_closeouts = []
+    seen_stage_ids: set[str] = set()
+    required_closeout_fields = [
+        "stage_id",
+        "project_id",
+        "project_task_id",
+        "host_id",
+        "branch",
+        "target_branch",
+        "status",
+        "step_results",
+        "identity_verified",
+        "worktree_scope_clean",
+        "conflict_free",
+        "worktree_merge_required",
+        "first_nonzero_step",
+        "commit_sha",
+        "push_readback_sha",
+        "merge_readback_sha",
+    ]
+    for index, closeout in enumerate(stage_closeouts):
+        context = f"topology.stage_closeouts[{index}]"
+        if not isinstance(closeout, dict):
+            errors.append(f"{context}: must be an object")
+            continue
+        errors.extend(require_fields(closeout, required_closeout_fields, context))
+        if any(field not in closeout for field in required_closeout_fields):
+            continue
+        for field in (
+            "stage_id",
+            "project_id",
+            "project_task_id",
+            "host_id",
+            "branch",
+            "target_branch",
+        ):
+            if not is_non_empty_string(closeout[field]):
+                errors.append(f"{context}: {field} must be a non-empty string")
+        stage_id = closeout["stage_id"]
+        if isinstance(stage_id, str):
+            if stage_id in seen_stage_ids:
+                errors.append(f"{context}: duplicate stage_id {stage_id}")
+            seen_stage_ids.add(stage_id)
+        if not is_enum_value(closeout["status"], STAGE_CLOSEOUT_STATUSES):
+            errors.append(f"{context}: status is invalid")
+        for field in (
+            "identity_verified",
+            "worktree_scope_clean",
+            "conflict_free",
+            "worktree_merge_required",
+        ):
+            if not isinstance(closeout[field], bool):
+                errors.append(f"{context}: {field} must be boolean")
+        first_nonzero_step = closeout["first_nonzero_step"]
+        if first_nonzero_step is not None and first_nonzero_step not in STAGE_CLOSEOUT_STEPS:
+            errors.append(
+                f"{context}: first_nonzero_step must be null or a known stage step"
+            )
+        for field in ("commit_sha", "push_readback_sha", "merge_readback_sha"):
+            value = closeout[field]
+            if value is not None and not is_non_empty_string(value):
+                errors.append(f"{context}: {field} must be null or a non-empty string")
+        step_results = closeout["step_results"]
+        if not isinstance(step_results, dict):
+            errors.append(f"{context}.step_results: must be an object")
+        else:
+            errors.extend(
+                require_fields(step_results, list(STAGE_CLOSEOUT_STEPS), f"{context}.step_results")
+            )
+            for step in STAGE_CLOSEOUT_STEPS:
+                if step in step_results and not is_enum_value(
+                    step_results[step], STAGE_STEP_RESULTS
+                ):
+                    errors.append(f"{context}.step_results: {step} is invalid")
+
     threads = topology["threads"]
     if not isinstance(threads, list) or not threads:
         errors.append("topology: threads must be a non-empty array")
@@ -636,9 +782,19 @@ def audit_topology(
 
     policy = topology["policy"]
     threads = topology["threads"]
+    nested_workers = topology["nested_workers"]
+    stage_closeouts = topology["stage_closeouts"]
     projects = {project["id"]: project for project in manifest["projects"]}
     tasks = {thread["task_id"]: thread for thread in threads}
     active_threads = [thread for thread in threads if thread["active_turn"]]
+    active_nested_workers = [worker for worker in nested_workers if worker["active"]]
+    active_execution_unit_count = len(active_threads) + len(active_nested_workers)
+    new_dispatch_budget = max(
+        0,
+        policy["max_active_turns"]
+        - active_execution_unit_count
+        - policy["reserved_control_slots"],
+    )
     context_pressure_counts: Counter[str] = Counter()
 
     if not topology["authoritative"]:
@@ -653,6 +809,19 @@ def audit_topology(
             active_turn_count=len(active_threads),
             max_active_turns=policy["max_active_turns"],
             task_ids=[thread["task_id"] for thread in active_threads],
+        )
+    if (
+        active_nested_workers
+        and active_execution_unit_count > policy["max_active_turns"]
+    ):
+        finding(
+            "ACTIVE_EXECUTION_UNIT_LIMIT_EXCEEDED",
+            "visible active turns plus nested workers exceed the configured limit",
+            active_turn_count=len(active_threads),
+            active_nested_worker_count=len(active_nested_workers),
+            active_execution_unit_count=active_execution_unit_count,
+            max_active_execution_units=policy["max_active_turns"],
+            worker_ids=[worker["worker_id"] for worker in active_nested_workers],
         )
 
     for definition in policy["control_roles"]:
@@ -683,6 +852,16 @@ def audit_topology(
 
     writer_counts: Counter[str] = Counter()
     for thread in threads:
+        if thread["role"] == "root_controller" and (
+            thread["project_id"] is not None or thread["writer"]
+        ):
+            finding(
+                "ROOT_PROJECT_EXECUTION_FORBIDDEN",
+                "the root controller cannot attach to a project or hold its writer lease",
+                task_id=thread["task_id"],
+                project_id=thread["project_id"],
+                writer=thread["writer"],
+            )
         if thread["active_turn"] and thread["state"] != "active":
             finding(
                 "ACTIVE_TURN_STATE_MISMATCH",
@@ -781,6 +960,235 @@ def audit_topology(
                 notification_id=context_health["notification_id"],
             )
 
+    for worker in nested_workers:
+        controller = tasks.get(worker["controller_task_id"])
+        if controller is None:
+            finding(
+                "NESTED_WORKER_CONTROLLER_MISSING",
+                "a nested worker must reference an authoritative controller task",
+                worker_id=worker["worker_id"],
+                controller_task_id=worker["controller_task_id"],
+            )
+        else:
+            if worker["project_id"] is not None and (
+                controller["role"] == "root_controller"
+                or controller["project_id"] != worker["project_id"]
+            ):
+                finding(
+                    "PROJECT_WORKER_WRONG_CONTROLLER",
+                    "project work must be controlled by that project's independent task, never Root",
+                    worker_id=worker["worker_id"],
+                    project_id=worker["project_id"],
+                    controller_task_id=worker["controller_task_id"],
+                    controller_role=controller["role"],
+                    controller_project_id=controller["project_id"],
+                )
+            if worker["active"] and not controller["active_turn"]:
+                finding(
+                    "ACTIVE_NESTED_WORKER_CONTROLLER_INACTIVE",
+                    "an active nested worker requires an active controller turn",
+                    worker_id=worker["worker_id"],
+                    controller_task_id=worker["controller_task_id"],
+                )
+            if worker["host_id"] != controller["host_id"]:
+                finding(
+                    "NESTED_WORKER_HOST_MISMATCH",
+                    "a nested worker must run on its declared controller host",
+                    worker_id=worker["worker_id"],
+                    controller_task_id=worker["controller_task_id"],
+                    worker_host_id=worker["host_id"],
+                    controller_host_id=controller["host_id"],
+                )
+        if worker["writer"]:
+            if worker["project_id"] is None:
+                finding(
+                    "NESTED_WRITER_WITHOUT_PROJECT",
+                    "a nested writer lease must belong to one project",
+                    worker_id=worker["worker_id"],
+                )
+            else:
+                writer_counts[worker["project_id"]] += 1
+
+    stage_closeout_status_counts: Counter[str] = Counter()
+    for closeout in stage_closeouts:
+        stage_closeout_status_counts[closeout["status"]] += 1
+        project_id = closeout["project_id"]
+        project_task = tasks.get(closeout["project_task_id"])
+        if project_id not in projects:
+            finding(
+                "STAGE_CLOSEOUT_UNKNOWN_PROJECT",
+                "stage closeout references a project absent from the manifest",
+                stage_id=closeout["stage_id"],
+                project_id=project_id,
+            )
+        if project_task is None:
+            finding(
+                "STAGE_CLOSEOUT_PROJECT_TASK_MISSING",
+                "stage closeout requires the existing project task",
+                stage_id=closeout["stage_id"],
+                project_task_id=closeout["project_task_id"],
+            )
+        else:
+            if project_task["role"] == "root_controller":
+                finding(
+                    "STAGE_CLOSEOUT_ROOT_EXECUTOR_FORBIDDEN",
+                    "Root may arbitrate the closeout but cannot commit, push, or merge project work",
+                    stage_id=closeout["stage_id"],
+                    project_task_id=closeout["project_task_id"],
+                )
+            if project_task["project_id"] != project_id:
+                finding(
+                    "STAGE_CLOSEOUT_PROJECT_TASK_MISMATCH",
+                    "stage closeout task must own the declared project",
+                    stage_id=closeout["stage_id"],
+                    project_id=project_id,
+                    task_project_id=project_task["project_id"],
+                )
+            if project_task["host_id"] != closeout["host_id"]:
+                finding(
+                    "STAGE_CLOSEOUT_HOST_MISMATCH",
+                    "stage closeout host must match its project task",
+                    stage_id=closeout["stage_id"],
+                    closeout_host_id=closeout["host_id"],
+                    task_host_id=project_task["host_id"],
+                )
+            if closeout["status"] == "in_progress" and not project_task["writer"]:
+                finding(
+                    "STAGE_CLOSEOUT_WRITER_REQUIRED",
+                    "an in-progress project closeout requires that project's writer lease",
+                    stage_id=closeout["stage_id"],
+                    project_task_id=closeout["project_task_id"],
+                )
+
+        blocking_conditions: list[str] = []
+        if not closeout["identity_verified"]:
+            blocking_conditions.append("identity_unverified")
+            finding(
+                "STAGE_CLOSEOUT_IDENTITY_UNVERIFIED",
+                "project task, branch, target, and host identity must be verified before mutation",
+                stage_id=closeout["stage_id"],
+            )
+        if not closeout["worktree_scope_clean"]:
+            blocking_conditions.append("dirty_worktree")
+            finding(
+                "STAGE_CLOSEOUT_DIRTY_WORKTREE",
+                "foreign or unowned dirty paths stop closeout until retained state is resolved",
+                stage_id=closeout["stage_id"],
+            )
+        if not closeout["conflict_free"]:
+            blocking_conditions.append("conflict")
+            finding(
+                "STAGE_CLOSEOUT_CONFLICT",
+                "a merge conflict stops the formal closeout without force merging",
+                stage_id=closeout["stage_id"],
+            )
+        if blocking_conditions and closeout["status"] != "stopped":
+            finding(
+                "STAGE_CLOSEOUT_STOP_REQUIRED",
+                "identity, worktree, or conflict blockers require status=stopped",
+                stage_id=closeout["stage_id"],
+                blockers=blocking_conditions,
+            )
+        if (
+            closeout["worktree_merge_required"]
+            and closeout["branch"] == closeout["target_branch"]
+        ):
+            finding(
+                "STAGE_CLOSEOUT_BRANCH_TARGET_AMBIGUOUS",
+                "a required worktree merge needs distinct source and target branches",
+                stage_id=closeout["stage_id"],
+                branch=closeout["branch"],
+                target_branch=closeout["target_branch"],
+            )
+
+        step_results = closeout["step_results"]
+        first_nonzero_step = closeout["first_nonzero_step"]
+        observed_nonzero_steps = [
+            step for step in STAGE_CLOSEOUT_STEPS if step_results[step] == "NONZERO"
+        ]
+        if first_nonzero_step is None and observed_nonzero_steps:
+            finding(
+                "STAGE_CLOSEOUT_NONZERO_MARKER_MISSING",
+                "a nonzero step requires an exact first_nonzero_step marker",
+                stage_id=closeout["stage_id"],
+                nonzero_steps=observed_nonzero_steps,
+            )
+        if first_nonzero_step is not None:
+            finding(
+                "STAGE_CLOSEOUT_FIRST_NONZERO",
+                "the formal stage closeout stopped at its first nonzero step",
+                stage_id=closeout["stage_id"],
+                first_nonzero_step=first_nonzero_step,
+            )
+            if step_results[first_nonzero_step] != "NONZERO":
+                finding(
+                    "STAGE_CLOSEOUT_NONZERO_MARKER_MISMATCH",
+                    "first_nonzero_step must identify a step whose result is NONZERO",
+                    stage_id=closeout["stage_id"],
+                    first_nonzero_step=first_nonzero_step,
+                    observed_result=step_results[first_nonzero_step],
+                )
+            first_index = STAGE_CLOSEOUT_STEPS.index(first_nonzero_step)
+            continued_steps = [
+                step
+                for step in STAGE_CLOSEOUT_STEPS[first_index + 1 :]
+                if step_results[step] != "UNEXECUTED"
+            ]
+            if continued_steps:
+                finding(
+                    "STAGE_CLOSEOUT_CONTINUED_AFTER_NONZERO",
+                    "all steps after the first nonzero must remain UNEXECUTED",
+                    stage_id=closeout["stage_id"],
+                    continued_steps=continued_steps,
+                )
+            if closeout["status"] != "stopped":
+                finding(
+                    "STAGE_CLOSEOUT_NONZERO_NOT_STOPPED",
+                    "a first nonzero requires status=stopped",
+                    stage_id=closeout["stage_id"],
+                    status=closeout["status"],
+                )
+
+        if step_results["commit"] == "PASS" and closeout["commit_sha"] is None:
+            finding(
+                "STAGE_CLOSEOUT_COMMIT_READBACK_MISSING",
+                "a passing commit step requires its exact commit SHA",
+                stage_id=closeout["stage_id"],
+            )
+        if step_results["push"] == "PASS" and closeout["push_readback_sha"] is None:
+            finding(
+                "STAGE_CLOSEOUT_PUSH_READBACK_MISSING",
+                "a passing push step requires remote SHA readback",
+                stage_id=closeout["stage_id"],
+            )
+        if step_results["merge"] == "PASS" and closeout["merge_readback_sha"] is None:
+            finding(
+                "STAGE_CLOSEOUT_MERGE_READBACK_MISSING",
+                "a passing merge step requires target-branch SHA readback",
+                stage_id=closeout["stage_id"],
+            )
+
+        if closeout["status"] == "complete":
+            incomplete_steps = [
+                step
+                for step in ("evidence", "test", "diff", "readback", "commit", "push")
+                if step_results[step] != "PASS"
+            ]
+            if step_results["build"] not in {"PASS", "NOT_REQUIRED"}:
+                incomplete_steps.append("build")
+            expected_merge_results = (
+                {"PASS"} if closeout["worktree_merge_required"] else {"PASS", "NOT_REQUIRED"}
+            )
+            if step_results["merge"] not in expected_merge_results:
+                incomplete_steps.append("merge")
+            if incomplete_steps or first_nonzero_step is not None:
+                finding(
+                    "STAGE_CLOSEOUT_INCOMPLETE",
+                    "complete requires evidence/test/build/diff/readback then commit/push/merge closure",
+                    stage_id=closeout["stage_id"],
+                    incomplete_steps=incomplete_steps,
+                )
+
     for project_id, count in sorted(writer_counts.items()):
         if count > policy["max_writers_per_project"]:
             finding(
@@ -793,6 +1201,11 @@ def audit_topology(
                     thread["task_id"]
                     for thread in threads
                     if thread["project_id"] == project_id and thread["writer"]
+                ]
+                + [
+                    worker["worker_id"]
+                    for worker in nested_workers
+                    if worker["project_id"] == project_id and worker["writer"]
                 ],
             )
 
@@ -1104,6 +1517,12 @@ def audit_topology(
         "observed_at_utc": topology["observed_at_utc"],
         "thread_count": len(threads),
         "active_turn_count": len(active_threads),
+        "active_nested_worker_count": len(active_nested_workers),
+        "active_execution_unit_count": active_execution_unit_count,
+        "reserved_control_slots": policy["reserved_control_slots"],
+        "new_dispatch_budget": new_dispatch_budget,
+        "stage_closeout_count": len(stage_closeouts),
+        "stage_closeout_status_counts": dict(sorted(stage_closeout_status_counts.items())),
         "writer_counts": dict(sorted(writer_counts.items())),
         "context_pressure_counts": dict(sorted(context_pressure_counts.items())),
         "control_phase": None if lifecycle is None else lifecycle["phase"],

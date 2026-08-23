@@ -53,6 +53,7 @@ def valid_topology():
         "observed_at_utc": "2026-08-22T00:00:00Z",
         "policy": {
             "max_active_turns": 3,
+            "reserved_control_slots": 1,
             "max_writers_per_project": 1,
             "control_roles": [
                 {
@@ -87,6 +88,8 @@ def valid_topology():
             "active_target_task_id": None,
             "lock_held": False,
         },
+        "nested_workers": [],
+        "stage_closeouts": [],
         "control_lifecycle": {
             "phase": "running",
             "root_task_id": "root-1",
@@ -177,6 +180,36 @@ def valid_topology():
                 "authorities": ["repo_write"],
             },
         ],
+    }
+
+
+def valid_stage_closeout():
+    return {
+        "stage_id": "alpha-stage-1",
+        "project_id": "alpha",
+        "project_task_id": "alpha-owner",
+        "host_id": "local",
+        "branch": "worktree/alpha-stage-1",
+        "target_branch": "main",
+        "status": "complete",
+        "step_results": {
+            "evidence": "PASS",
+            "test": "PASS",
+            "build": "NOT_REQUIRED",
+            "diff": "PASS",
+            "readback": "PASS",
+            "commit": "PASS",
+            "push": "PASS",
+            "merge": "PASS",
+        },
+        "identity_verified": True,
+        "worktree_scope_clean": True,
+        "conflict_free": True,
+        "worktree_merge_required": True,
+        "first_nonzero_step": None,
+        "commit_sha": "a" * 40,
+        "push_readback_sha": "a" * 40,
+        "merge_readback_sha": "b" * 40,
     }
 
 
@@ -278,7 +311,197 @@ class PortfolioControlTests(unittest.TestCase):
         result = CONTROL.audit_topology(manifest, valid_topology())
         self.assertTrue(result["ok"])
         self.assertEqual(result["active_turn_count"], 2)
+        self.assertEqual(result["active_nested_worker_count"], 0)
+        self.assertEqual(result["active_execution_unit_count"], 2)
+        self.assertEqual(result["reserved_control_slots"], 1)
+        self.assertEqual(result["new_dispatch_budget"], 0)
         self.assertEqual(result["writer_counts"], {"alpha": 1})
+
+    def test_topology_audit_counts_nested_workers_in_capacity(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 4
+        topology["nested_workers"].append(
+            {
+                "worker_id": "runtime-worker-1",
+                "controller_task_id": "runtime-1",
+                "project_id": None,
+                "host_id": "local",
+                "active": True,
+                "writer": False,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["active_turn_count"], 2)
+        self.assertEqual(result["active_nested_worker_count"], 1)
+        self.assertEqual(result["active_execution_unit_count"], 3)
+        self.assertEqual(result["new_dispatch_budget"], 0)
+
+    def test_topology_audit_rejects_nested_worker_capacity_overflow(self):
+        topology = valid_topology()
+        topology["nested_workers"].extend(
+            [
+                {
+                    "worker_id": "runtime-worker-1",
+                    "controller_task_id": "runtime-1",
+                    "project_id": None,
+                    "host_id": "local",
+                    "active": True,
+                    "writer": False,
+                },
+                {
+                    "worker_id": "runtime-worker-2",
+                    "controller_task_id": "runtime-1",
+                    "project_id": None,
+                    "host_id": "local",
+                    "active": True,
+                    "writer": False,
+                },
+            ]
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "ACTIVE_EXECUTION_UNIT_LIMIT_EXCEEDED",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_counts_nested_project_writers(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 4
+        topology["nested_workers"].append(
+            {
+                "worker_id": "alpha-worker-1",
+                "controller_task_id": "runtime-1",
+                "project_id": "alpha",
+                "host_id": "local",
+                "active": True,
+                "writer": True,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PROJECT_WRITER_LIMIT_EXCEEDED",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_root_as_project_writer(self):
+        topology = valid_topology()
+        root = topology["threads"][0]
+        root["project_id"] = "alpha"
+        root["writer"] = True
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "ROOT_PROJECT_EXECUTION_FORBIDDEN",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_root_controlled_project_worker(self):
+        topology = valid_topology()
+        topology["nested_workers"].append(
+            {
+                "worker_id": "alpha-worker-1",
+                "controller_task_id": "root-1",
+                "project_id": "alpha",
+                "host_id": "local",
+                "active": False,
+                "writer": False,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "PROJECT_WORKER_WRONG_CONTROLLER",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_accepts_project_controlled_nested_worker(self):
+        topology = valid_topology()
+        topology["policy"]["max_active_turns"] = 4
+        topology["nested_workers"].append(
+            {
+                "worker_id": "alpha-worker-1",
+                "controller_task_id": "alpha-owner",
+                "project_id": "alpha",
+                "host_id": "local",
+                "active": True,
+                "writer": False,
+            }
+        )
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+
+    def test_topology_audit_accepts_complete_stage_closeout(self):
+        topology = valid_topology()
+        topology["stage_closeouts"].append(valid_stage_closeout())
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["stage_closeout_status_counts"], {"complete": 1})
+
+    def test_topology_audit_rejects_closeout_without_merge_readback(self):
+        topology = valid_topology()
+        closeout = valid_stage_closeout()
+        closeout["merge_readback_sha"] = None
+        topology["stage_closeouts"].append(closeout)
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "STAGE_CLOSEOUT_MERGE_READBACK_MISSING",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_stops_closeout_after_first_nonzero(self):
+        topology = valid_topology()
+        closeout = valid_stage_closeout()
+        closeout["status"] = "stopped"
+        closeout["step_results"].update(
+            {
+                "build": "NONZERO",
+                "diff": "UNEXECUTED",
+                "readback": "UNEXECUTED",
+                "commit": "UNEXECUTED",
+                "push": "UNEXECUTED",
+                "merge": "UNEXECUTED",
+            }
+        )
+        closeout["first_nonzero_step"] = "build"
+        closeout["commit_sha"] = None
+        closeout["push_readback_sha"] = None
+        closeout["merge_readback_sha"] = None
+        topology["stage_closeouts"].append(closeout)
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertFalse(result["ok"])
+        self.assertIn("STAGE_CLOSEOUT_FIRST_NONZERO", codes)
+        self.assertNotIn("STAGE_CLOSEOUT_CONTINUED_AFTER_NONZERO", codes)
+
+    def test_topology_audit_rejects_closeout_continuing_after_nonzero(self):
+        topology = valid_topology()
+        closeout = valid_stage_closeout()
+        closeout["status"] = "stopped"
+        closeout["step_results"]["build"] = "NONZERO"
+        closeout["first_nonzero_step"] = "build"
+        topology["stage_closeouts"].append(closeout)
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "STAGE_CLOSEOUT_CONTINUED_AFTER_NONZERO",
+            {finding["code"] for finding in result["findings"]},
+        )
+
+    def test_topology_audit_rejects_root_stage_closeout_executor(self):
+        topology = valid_topology()
+        closeout = valid_stage_closeout()
+        closeout["project_task_id"] = "root-1"
+        topology["stage_closeouts"].append(closeout)
+        result = CONTROL.audit_topology(valid_manifest(), topology)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "STAGE_CLOSEOUT_ROOT_EXECUTOR_FORBIDDEN",
+            {finding["code"] for finding in result["findings"]},
+        )
 
     def test_topology_audit_reports_duplicate_control_role(self):
         topology = valid_topology()

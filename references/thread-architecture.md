@@ -40,6 +40,10 @@ project writer(s) -> runtime supervisor -> root controller
   and user-impacting decisions. Ordinary mechanical outcomes stay in the ledger.
 - Owner liaison batches the smallest precise action the user must perform. It does
   not reinterpret authority.
+- Root performs admission, authority and priority decisions, stop-condition review,
+  and portfolio aggregation only. Implementation, tests, builds, fixes, and delivery
+  execute in the corresponding project task. Root must not become a writer or use a
+  Root-controlled nested worker as a substitute for an unavailable project task.
 
 ## Writer leases and concurrency
 
@@ -54,8 +58,31 @@ project writer(s) -> runtime supervisor -> root controller
   Control tasks consume capacity while they are actually running. Reserve enough
   headroom for root or runtime supervision to process a terminal event without
   starving the portfolio.
+- Count each active nested worker as another execution unit even when it does not
+  appear as a top-level task. Nested writers also consume the project's single
+  writer lease. Compute `new_dispatch_budget = max(0, max_active_turns -
+  active_turns - active_nested_workers - reserved_control_slots)`. If the runtime
+  exposes only a worker-count lower bound or omits worker identity, use a zero
+  dispatch budget until an authoritative readback resolves it.
+- A project-associated nested worker must be controlled by that project's task.
+  It normally operates under the controller's one writer lease; set the nested
+  worker's `writer=true` only after a formal lease transfer makes the controller
+  non-writer. Root-controlled project workers are always invalid.
 - Parallelize only projects with different writers and no shared migration lock,
   candidate, release channel, owner decision, or other serialized state.
+
+## Project-stage closeout
+
+- The same admitted project task that owns the writer lease performs stage closeout.
+  Root may grant authority, choose priority, or arbitrate a conflict, but it never
+  runs project Git commands or substitutes a Root-controlled worker.
+- Close each completed stage in order: evidence, test, build, diff, readback, commit,
+  push, and worktree merge. Record the exact source branch and target branch before
+  mutation and read back the commit, remote, and merged-target SHAs.
+- `NOT_REQUIRED` is allowed only for build or merge with contract evidence. At the
+  first `NONZERO`, mark all later steps `UNEXECUTED`. Unknown identity, foreign dirty
+  paths, or a conflict sets the closeout to `stopped`; force push and force merge are
+  forbidden.
 
 ## Task lifecycle
 
@@ -229,6 +256,7 @@ Create a JSON snapshot from current runtime metadata:
   "observed_at_utc": "2026-08-22T00:00:00Z",
   "policy": {
     "max_active_turns": 6,
+    "reserved_control_slots": 2,
     "max_writers_per_project": 1,
     "control_roles": [
       {
@@ -251,6 +279,45 @@ Create a JSON snapshot from current runtime metadata:
     "active_target_task_id": null,
     "lock_held": false
   },
+  "nested_workers": [
+    {
+      "worker_id": "privacy-security-executor-1",
+      "controller_task_id": "privacy-task-1",
+      "project_id": "privacy-agent-router",
+      "host_id": "local",
+      "active": true,
+      "writer": false
+    }
+  ],
+  "stage_closeouts": [
+    {
+      "stage_id": "privacy-r65",
+      "project_id": "privacy-agent-router",
+      "project_task_id": "privacy-task-1",
+      "host_id": "local",
+      "branch": "worktree/privacy-r65",
+      "target_branch": "main",
+      "status": "complete",
+      "step_results": {
+        "evidence": "PASS",
+        "test": "PASS",
+        "build": "NOT_REQUIRED",
+        "diff": "PASS",
+        "readback": "PASS",
+        "commit": "PASS",
+        "push": "PASS",
+        "merge": "PASS"
+      },
+      "identity_verified": true,
+      "worktree_scope_clean": true,
+      "conflict_free": true,
+      "worktree_merge_required": true,
+      "first_nonzero_step": null,
+      "commit_sha": "1111111111111111111111111111111111111111",
+      "push_readback_sha": "1111111111111111111111111111111111111111",
+      "merge_readback_sha": "2222222222222222222222222222222222222222"
+    }
+  ],
   "threads": [
     {
       "task_id": "runtime-task-1",
@@ -264,6 +331,32 @@ Create a JSON snapshot from current runtime metadata:
       "writer": false,
       "provisional": false,
       "authorities": ["ledger_write", "migration_control"]
+    },
+    {
+      "task_id": "root-task-1",
+      "role": "root_controller",
+      "project_id": null,
+      "host_id": "local",
+      "root": "D:\\control",
+      "canonical_project_root": null,
+      "state": "active",
+      "active_turn": true,
+      "writer": false,
+      "provisional": false,
+      "authorities": ["portfolio_decide"]
+    },
+    {
+      "task_id": "privacy-task-1",
+      "role": "project_writer",
+      "project_id": "privacy-agent-router",
+      "host_id": "local",
+      "root": "D:\\projects\\privacy-agent-router",
+      "canonical_project_root": null,
+      "state": "active",
+      "active_turn": true,
+      "writer": true,
+      "provisional": false,
+      "authorities": ["project_execute"]
     }
   ]
 }
@@ -293,6 +386,11 @@ checks:
 
 - required control-role presence, multiplicity, and authorities;
 - active-turn capacity and status consistency;
+- nested-worker capacity, controller/host consistency, reserved control slots, and
+  the resulting new-dispatch budget;
+- Root/project execution separation and project-worker controller identity;
+- project-stage evidence/test/build/diff/readback-to-commit/push/merge closure,
+  including exact executor, branches, stop-on-first-nonzero, and SHA readbacks;
 - one writer lease per project;
 - manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;

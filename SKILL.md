@@ -18,8 +18,23 @@ host identity, or evidence boundaries.
    topology snapshot.
 3. Select the smallest set of independent next actions that materially advances the
    portfolio. Separate control-plane roles from project writers, keep one writer
-   lease per project, cap active turns, and serialize migrations or shared-state
-   changes.
+   lease per project, count nested workers as execution units, reserve control-plane
+   capacity before calculating a new-dispatch budget, and serialize migrations or
+   shared-state changes. A worker hidden inside an active Root turn still consumes
+   capacity and a writer lease; if its identity or count cannot be read back,
+   conservatively set new-dispatch budget to zero.
+   Root owns admission, authority, priority, stop conditions, major decisions, and
+   result aggregation only. Project implementation, tests, builds, fixes, and
+   delivery must run in that project's independent task. Root cannot substitute
+   itself or a Root-controlled nested worker when the correct project task is
+   unavailable.
+   At every completed project stage, keep the writer in that project task and close
+   `evidence -> test -> build -> diff -> readback -> commit -> push -> merge`. Record
+   an exact source branch, target branch, commit SHA, remote readback, and merge
+   readback. Mark build or merge `NOT_REQUIRED` only when the project contract proves
+   that fact. On unknown identity, foreign dirty paths, conflict, or the first
+   nonzero, stop once and mark every later step `UNEXECUTED`; never force push or
+   force merge. Root may decide authority or conflicts but cannot perform the closeout.
    Treat context pressure as topology state: after compaction, audit the summary as
    short/accurate/usable. If renewal is required, notify the sole migration
    controller once; never use a fixed compaction count or let scheduling launch the

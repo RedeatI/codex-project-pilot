@@ -137,6 +137,7 @@ def main() -> int:
                 "observed_at_utc": "2026-08-22T00:00:00Z",
                 "policy": {
                     "max_active_turns": 2,
+                    "reserved_control_slots": 1,
                     "max_writers_per_project": 1,
                     "control_roles": [
                         {
@@ -162,6 +163,8 @@ def main() -> int:
                     "active_target_task_id": None,
                     "lock_held": False,
                 },
+                "nested_workers": [],
+                "stage_closeouts": [],
                 "threads": [
                     {
                         "task_id": "root-1",
