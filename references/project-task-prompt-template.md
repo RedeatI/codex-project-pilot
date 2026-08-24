@@ -1,12 +1,96 @@
 # Project task prompt contract
 
-Contract version: `PROJECT_TASK_CONTRACT_V2_5`
-Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V1`
+Contract version: `PROJECT_TASK_CONTRACT_V2_6_TURBO`
+Risk calibration: `FIVE_PROJECTS_SOL_RISK_CALIBRATION_V2_TURBO`
 
-Use this compact contract for a project implementation task. In federated mode the
-project owner selects and closes its own local rounds inside the declared authority
-envelope. In legacy root mode, Root uses a separate control-only contract and must
-not execute these project steps.
+Use this high-velocity, risk-tiered contract for multi-project engineering execution.
+
+---
+
+## 1. PROJECT_TASK_CONTRACT_V2_6_TURBO (Active Standard)
+
+```text
+PROJECT_TASK_CONTRACT_V2_6_TURBO
+PROJECT=<stable project id>
+ACTION_ID=<fresh exact action id>
+PROJECT_TASK_ID=<existing independent task id>
+GOVERNANCE_MODE=FEDERATED_THIN_KERNEL
+MODEL_ROLE=SOL_DECISION_CORE|TERRA_PRIMARY_WORKER|LUNA_LIGHT_WORKER
+HOST=<exact host scope and host id>
+ROOT=<exact canonical project root>
+SOURCE_BRANCH=<exact source branch>
+TARGET_BRANCH=<exact target branch>
+STAGE_BOUNDARY=<authorized end state for this contract>
+OWNED_PATHS=<exact paths or exact generated-artifact boundary>
+WRITER_LEASE=<project id + holder task id + evidence id>
+AUTHORITIES=<exact granted authorities>
+AUTHORITY_ENVELOPE=<project-local decisions allowed and exact exclusions>
+INPUTS=<complete candidate/input identities and retained evidence ids>
+PRESERVED_STATE=<foreign dirty paths, retained candidates, evidence, and worktrees>
+OUTCOME=<smallest complete independently state-changing stage>
+DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SECURITY
+
+TURBO_EXECUTION_CONTROLS
+- FAST_TRACK_MODE=BUILD_ONLY_DURING_IMPL (Prohibit intermediate unit/integration tests during multi-file coding)
+- VERIFICATION_AT_IMPL=SUB_SECOND_SYNTAX_TYPECHECK_ONLY (e.g. tsc --noEmit, py_compile, cargo check)
+- MAX_ZERO_PROGRESS_RETRIES=1 (Zero-progress command retry limit)
+- STUB_AND_BYPASS_TIMEOUT=1_ATTEMPT_MAX (Mock/stub unresolved non-core blockers into .agents/BLOCKERS.md)
+- WARNING_POLICY=WHITELIST_IGNORE_OR_TRIAGE_ONCE
+- BATCH_SLICING_MODE=DYNAMIC_RISK_TIERED (Low: 3-5 files; Medium: 1-2 files; High: 1 file instant check)
+
+WARNING_TRIAGE_RULES
+- BLOCKING_BLACKLIST=[SecurityLeak, CompilerFatal, TypeCheckError, BrokenBuild, SchemaMismatch]
+- NON_BLOCKING_WHITELIST=[DeprecationNotice, StyleWarning, MinorLinterHint, ThirdPartyCosmeticLog]
+- UNCLASSIFIED_ACTION=SINGLE_PASS_READONLY_TRIAGE_THEN_PROCEED
+
+FINAL_GOAL=<project goal from live manifest>
+CURRENT_STAGE=<current goal stage>
+NEXT_DELIVERABLE=<smallest stage-complete deliverable>
+ACCEPTANCE_EVIDENCE=<required evidence IDs/types>
+AUTONOMOUS_DECISION_SCOPE=<implementation/test/build/mechanical/path/harness/small-project-architecture/local-git-closeout>
+STOP_CONDITIONS=<first-nonzero/scope-writer/owner-gate/circuit-breaker>
+OWNER_ONLY_EXCEPTIONS=<cross-project/major-architecture/authority/credential/production/migration/destructive>
+NEXT_STAGE_TRIGGER=STAGE_TERMINAL_WITH_VALID_RECEIPT
+ROLL_FORWARD_REQUIRED=TRUE
+ORDINARY_RECOVERY_AUTONOMOUS=TRUE
+
+ROLE_BOUNDARY
+- In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
+  selection, admission, recovery, verification, and closeout inside
+  AUTHORITY_ENVELOPE. It does not wait for a portfolio root.
+- The scheduler manages unblocked elastic multi-project wave dispatch only. It cannot
+  grant authority, write this project, write the control ledger, migrate tasks, or
+  override this task.
+- This existing project task alone performs implementation, focused tests, build,
+  repair, commit, non-force push, and fast-forward merge for this project.
+- Do not create a substitute controller-owned worker, filler task, or second writer.
+  Return material evidence deltas to runtime supervision. Route only authority
+  expansion, cross-project conflicts, or owner-only actions through the liaison.
+
+MANDATORY_OUTPUT_REQUIREMENT
+At the conclusion of this turn, emit exactly one structured JSON object conforming to `TERMINAL_RECEIPT_V2_6` containing the decisive exit code, git commit SHA, and SHA-256 evidence digest.
+```
+
+---
+
+## 2. Ultra-Lean Micro-Directive (Turn-Level Dispatch)
+
+For rapid turn execution without redundant token overhead:
+
+```text
+[TURBO_MICRO_DIRECTIVE]
+PROJECT: {{PROJECT_NAME}} | STAGE: {{STAGE_ID}} | RISK: {{RISK_LEVEL}}
+TARGET: {{STAGE_DELIVERABLE_SUMMARY}}
+PATHS: {{OWNED_PATHS}}
+1. Batch-implement all planned files first. DO NOT run unit tests mid-implementation.
+2. Verify with fast compile/type-check only (<= 3s).
+3. On non-core failure after 1 attempt, apply Stub & Bypass into .agents/BLOCKERS.md.
+4. Run focused validation suite once at stage end -> Git Commit -> Emit TERMINAL_RECEIPT.
+```
+
+---
+
+## 3. PROJECT_TASK_CONTRACT_V2_5 (Legacy Compatibility)
 
 ```text
 PROJECT_TASK_CONTRACT_V2_5
@@ -49,209 +133,4 @@ ORDINARY_RECOVERY_AUTONOMOUS=TRUE
 GOAL_DIAGNOSIS_TRIGGER=NONE|goal_stalled|thread_idle|completed_empty_output
 GOAL_RECOVERY_ACTION=NONE|RESUME_CURRENT_GOAL|AUTHORIZED_INDEPENDENT_PATH
 OWNER_REQUEST_ID=<canonical stable request id or NONE>
-
-ROLE_BOUNDARY
-- In FEDERATED_THIN_KERNEL mode, this project owner performs project-local action
-  selection, admission, recovery, verification, and closeout inside
-  AUTHORITY_ENVELOPE. It does not wait for a portfolio root.
-- The scheduler may propose order and capacity only. It cannot grant authority,
-  write this project, write the control ledger, migrate tasks, or override this task.
-  It may hold only the scheduler authority allowlist and can never be this project's
-  owner or writer.
-- In ROOT_CONTROLLER mode, Root performs portfolio admission, authority, priority,
-  stop-condition, conflict, major-decision, and summary work only.
-- This existing project task alone performs implementation, focused tests, build,
-  repair, commit, non-force push, and fast-forward merge for this project.
-- Do not create a substitute controller-owned worker, filler task, or second writer.
-  Return material evidence deltas to runtime supervision. Route only authority
-  expansion, cross-project conflicts, or owner-only actions through the liaison.
-- A scoped executor may use only its manifest subset. It cannot hold
-  project-local decision, admission, or fresh-round authority unless its exact task
-  ID is the live manifest `owner_task_id`.
-
-FACT_AND_AUTHORITY_BOUNDARY
-- Model judgment is not evidence. Plans, queue state, static checks, local output,
-  historical output, and self-reported completion do not prove remote host state,
-  GitHub state, merge, deployment, release, or production readiness.
-- Use only exact authorized paths, host, branch, tools, and credentials already in
-  scope. Do not read, generate, move, print, or infer credentials, private keys, or
-  production data.
-- "Continue" does not authorize deploy, release, production mutation, publication,
-  credential use, or destructive cleanup. Security-sensitive ambiguity fails closed.
-
-ROUTINE_PUBLIC_NETWORK_BOUNDARY
-- `ROUTINE_PUBLIC_NETWORK=AUTHORIZED` is valid only when `AUTHORITIES` and the live
-  project manifest both explicitly list `routine_public_network`. Portfolio policy
-  alone never grants it. Otherwise mark the network action `UNEXECUTED`.
-- The exact envelope is mandatory for public dependency retrieval, public
-  documentation lookup, read-only public APIs, build-resource retrieval, and network
-  diagnostics. Use no credentials, stay inside the existing project/stage/dependency
-  scope, write only to listed locations, and retain HTTP/source/hash or diagnostic
-  evidence appropriate to the action.
-- Credentials or private data, production or real-user impact, destructive actions,
-  external publication/deployment, cross-host migration, material scope or dependency
-  expansion, irreversible external writes, and major architecture direction remain
-  owner gates. Routine public network authority cannot waive host/root, frozen task,
-  writer, migration, first-nonzero, secret, or publication gates.
-
-CONTINUOUS_PROGRESS_BOUNDARY
-- After a stage completes, the same project owner immediately plans and fresh-admits
-  the next stage-complete long contract within `AUTHORITY_ENVELOPE`; it does not wait
-  for a portfolio root or split the stage into repeated half-step prompts.
-- If one acceptance or external gate is temporarily blocked, preserve it as
-  `BLOCKED`, mark its dependent later gates `UNEXECUTED`, and select only authorized
-  feature, integration, test, documentation, performance, or evidence work that does
-  not depend on that gate and can materially advance the project.
-- Never infer or fabricate acceptance, bypass safety/authority/publication evidence,
-  repeat unchanged checks, or create filler/duplicate work. A project-controlled
-  helper is counted against effective capacity, stays within this owner's envelope,
-  and cannot hold a second writer lease or mutate outside its exact delegated scope.
-- On every terminal outcome, return `NEXT_STAGE_SEED` and `HEARTBEAT_HANDOFF` so the
-  next wake can derive the next stage from fresh evidence. Their absence does not
-  authorize global waiting: the heartbeat must still sweep this project's current
-  task, ledger, topology, authority, and writer state and form a minimum envelope
-  when a safe action exists.
-
-CONTROL_PLANE_ESCALATION_BOUNDARY
-- Report a control-plane issue only when project progress exposes multi-project start
-  starvation, heartbeat next-stage derivation/dispatch failure, parallelism anomaly,
-  long-idle control state, or a governance conflict with the user's goal. Include
-  affected projects, root cause, architecture options, recommended option, whether a
-  user decision is required, and immediate safe actions. Other projects continue.
-- An ordinary single-project implementation, test, build, path, or harness failure is
-  not a control-plane escalation; resolve it with a materially different project-local
-  round. Major project architecture still uses the existing owner gate.
-
-PROJECT_GOAL_CONTRACT_BOUNDARY
-- Read the live manifest goal before action selection. `FINAL_GOAL`, `CURRENT_STAGE`,
-  `NEXT_DELIVERABLE`, and `ACCEPTANCE_EVIDENCE` define the outcome; do not substitute
-  a completed command, turn, or local artifact for the final goal.
-- The writer autonomously handles ordinary implementation, test, build, mechanical,
-  path, harness, small project-local architecture, and local Git closeout inside the
-  declared scope. Cross-project conflict, major architecture, authority escalation,
-  credentials/private data, production release/deploy, cross-host migration, and
-  destructive or irreversible external writes remain owner-only.
-- On `STAGE_TERMINAL`, retain the stage evidence, update the current stage and next
-  deliverable, prove goal roll-forward, and immediately derive the next long contract.
-  A missing goal is a governance conflict, not permission for global waiting. A
-  blocked project does not pause any independent project.
-- `goal_stalled`, `thread_idle`, and `completed_empty_output` are diagnosis triggers,
-  not completion. Diagnose and resume the original final goal/current objective, or
-  choose authorized feature, integration, test, documentation, performance, or
-  evidence work independent of the blocker. Never count status-only output as
-  progress or abandon the project after one stopped, idle, or empty turn.
-
-ACTION_SELECTION
-- When task, host, root, writer, inputs, and authority are complete, choose one
-  smallest stage-complete action rather than separate preflight, implementation,
-  test, build, and closeout prompts. Cover all applicable authorized gates through
-  final remote/target readback. Do not create filler, duplicate work, empty
-  heartbeats, status-only tasks, or work intended to consume capacity.
-- Parallel work is allowed only for fresh-admitted, complete, independent project
-  actions with separate writer leases and no shared lock, candidate, target branch,
-  release channel, or owner decision.
-- Prefer core functionality, integration, and acceptance-candidate evidence. Defer
-  only non-blocking deep security research into an explicit pre-release gate; do not
-  infer readiness or release until it closes.
-- Never defer confirmed critical/high findings, authentication or authorization
-  fail-closed behavior, credential or destructive-data risks, necessary dependency
-  or supply-chain checks, or publication/release gates.
-
-VALIDATION_VALUE_GATE
-Before each proposed validation, emit:
-DECISION_UNLOCKED=<specific blocker removed or decision changed>
-NEW_EVIDENCE_EXPECTED=<new evidence id/type>
-WHY_REQUIRED=<safety|authority|publication|merge|release|decision-changing>
-If DECISION_UNLOCKED is NONE, NEW_EVIDENCE_EXPECTED is NONE, or the result cannot
-change the next action, mark the check NOT_REQUIRED and do not run it. Do not repeat
-a still-valid readback. Re-read only when state changed, prior evidence became stale
-in a decision-relevant way, a bounded wait became due, or a mandatory final gate has
-not yet been proved. Prefer one high-information validation over many narrow checks.
-
-THREAD_RECOVERY_BOUNDARY
-- This project task does not self-migrate, archive itself, or create a successor.
-- Report STUCK only with authoritative exact task/host/root-worktree/model-thinking,
-  retained-evidence, writer/candidate, terminal-blocker, and non-waiting evidence.
-  Waiting, ordinary latency, a transient failure, idle, and unknown state are not STUCK.
-- Send one deduplicated MIGRATION_RECOMMENDED packet to the sole controller. The
-  controller alone acquires the global lock and creates or selects one non-writer
-  HANDOFF_ONLY successor on the same host/role/model/thinking.
-- User willingness to consider another host authorizes only an exact
-  CROSS_HOST_MIGRATION_REQUEST_V1 through the owner liaison. It must prove the
-  source-host blocker and name the target host/path, preserved worktree/evidence,
-  frozen model/thinking, single-lock sequence, and rollback. Without a later exact
-  authorization, host change, replacement creation, byte transfer, writer transfer,
-  archive, and lock acquisition are UNEXECUTED.
-- Preserve the old task, worktree, and retained evidence. Writer transfer and old-task
-  recoverable archive occur only after HANDOFF_ACCEPTED. Never delete or duplicate.
-- The successor needs fresh admission for its materially different project action
-  and obeys first-nonzero stopping.
-
-OWNER_ACTION_ROUTING
-- If progress truly requires user judgment, a selection, login, desktop action, host
-  migration, or another owner-only action, create one canonical `OWNER_REQUEST_ID`.
-  Only liaison task `01a013cd-60f1-7f73-974e-3663f7297ad2` sends the timely packet to
-  the user: request ID, blocker, authority/evidence, minimal options, recommendation,
-  and next step. Root, scheduler, runtime supervisor, and project owners may create
-  or reference the ID but cannot ask the user directly.
-- The liaison deduplicates canonical IDs and aliases, records delivery readback and
-  turn, and returns the response under the same ID to the governance/runtime response
-  router. That router may reference it only to the exact manifest project owner.
-- Resolve authorized mechanical, path, harness, small project-local architecture,
-  and scheduling problems internally; do not send low-value messages or repeat an
-  already delivered owner request.
-
-INTERNAL_RECOVERY_AND_REPORTING
-- This task may coordinate bounded non-writing helpers for diagnosis or evidence
-  aggregation. Helpers do not hold the writer lease and cannot mutate the repository,
-  Git state, remote state, or release channel.
-- Do not report routine half-steps, unchanged state, queue reminders, parser/path/
-  harness defects, or mechanically decidable outcomes to a controller or the user. Return one
-  compact terminal evidence record. Coordinators aggregate actual dispatch and
-  terminal deltas rather than commentary.
-- A first formal/native nonzero ends only this round. Preserve every retained PASS,
-  mark later gates UNEXECUTED, and name one materially different recovery action.
-  The coordinator fresh-admits that action and resumes this same writer unless the
-  task is authoritatively proven stuck.
-- Escalate only genuine owner login/desktop/session work, credentials, external
-  ownership or branch choice not derivable from authority, destructive/high-impact
-  action, host migration, security/architecture direction, publication/release
-  beyond current authority, or authoritative proof that no safe next action exists.
-
-FORMAL_CHAIN
-Run only applicable gates in order:
-preflight -> implementation/diagnosis -> evidence -> focused test ->
-decision-changing full test/build -> diff/scope/secret check -> readback -> commit ->
-non-force push -> fast-forward merge -> remote/merge readback
-For every NOT_REQUIRED gate, record the contract reason. At the first formal/native
-nonzero, stop immediately, preserve retained and foreign state, and mark every later
-gate UNEXECUTED. Do not retry, change entry point, force, reset, discard, or broaden
-scope in the same round. A new round requires fresh admission plus a materially
-different action.
-
-FINAL_READBACK
-OUTCOME_CLASS=PASS|BLOCKED|WAITING|UNEXECUTED|NOT_REQUIRED
-STAGE_STATUS=COMPLETE|ROUND_STOPPED_NEXT_ADMITTED|WAITING_OWNER_ONLY|BLOCKED_NO_SAFE_ACTION
-FIRST_NONZERO=<gate and exact result or NONE>
-EXECUTED=<ordered gates and evidence ids>
-UNEXECUTED=<ordered gates or NONE>
-NOT_REQUIRED=<gate: reason or NONE>
-DIFF_SCOPE=<owned paths and secret-check result>
-COMMIT_SHA=<sha or NONE>
-REMOTE_SHA=<sha or NONE>
-MERGE_SHA=<sha or NONE>
-DEPLOYED=TRUE|FALSE|UNPROVED
-RELEASED=TRUE|FALSE|UNPROVED
-NEXT=<one smallest action, bounded wait condition, owner decision, or NONE>
-NEXT_STAGE_SEED=<next authorized stage or evidence needed to derive it>
-HEARTBEAT_HANDOFF=<terminal evidence IDs; blocker class; independent safe routes; recompute trigger>
-GOAL_ROLL_FORWARD=<updated current stage; next deliverable; evidence id or NOT_TERMINAL>
-OWNER_ACTION_REQUIRED=<minimal exact action or NONE>
-MIGRATION_READBACK=<old/new ids, fence, handoff, archive, writer transfer or NONE>
-
-Never claim completion, readiness, deployment, release, or a delivery date unless
-every required authoritative precondition and final readback is present.
 ```
-
-For research rationale and evidence limits, read
-[gpt-5p6-sol-risk-calibration.md](gpt-5p6-sol-risk-calibration.md).

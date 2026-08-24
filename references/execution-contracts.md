@@ -20,6 +20,38 @@ A useful long contract identifies:
 Do not copy a full transcript. A continuation handoff should retain only current
 state and one unambiguous next action.
 
+## Turbo Fast-Track and Elastic Concurrency (V2.6)
+
+`PROJECT_TASK_CONTRACT_V2_6_TURBO` activates high-throughput, latency-minimized execution across an arbitrary number of independent projects without artificial concurrency bottlenecks.
+
+### 1. Dynamic Risk-Tiered Slicing
+Batch implementations based on operational blast radius rather than arbitrary single-file gates:
+- **Low Risk (UI layout, documentation, decoupled helpers)**: Batch 3–5 files before running a single focused gate.
+- **Medium Risk (Standard business logic, API client routes)**: Batch 1–2 files before running a focused gate.
+- **High Risk (Auth boundaries, database migration, concurrency locks)**: Execute single-slice instant validation.
+
+### 2. Build-Only Fast Track During Implementation
+- **Ban Intermediate Unit/Integration Tests**: During multi-file feature writing, running full or unit test suites after every edit is prohibited.
+- **Sub-Second Syntax & Typecheck Only**: Writers verify intermediate edits solely with rapid compile/type-check tools (`tsc --noEmit`, `py_compile`, `cargo check`).
+- **Single-Pass Regression**: Validation test suites are deferred and executed once in bulk at stage closeout.
+
+### 3. 30-Second Stub & Bypass Protocol
+- When encountering an unresolved non-blocking dependency, third-party API mismatch, or flaky test assertion, the writer is permitted **at most one** repair attempt.
+- On a second failure, the writer MUST immediately insert a typed `# TODO: [BYPASS]` stub or mock, append the issue to `.agents/BLOCKERS.md`, and advance to the next unblocked component.
+
+### 4. Zero-Progress Circuit Breaker
+- Invariant: `max_zero_progress_retries = 1`. Re-running identical test/build commands without intervening code modifications is strictly forbidden.
+
+### 5. Elastic Uncapped Wave Dispatch
+- Multi-project concurrency is dynamically unconstrained across isolated physical repositories. All active, non-blocked projects are dispatched simultaneously in parallel waves.
+- Each project maintains its exclusive single-writer lease to prevent internal index collisions, but cross-project executions operate with zero cross-blocking.
+
+### 6. Bounded Log & Context Budget
+- Intermediate stdout/stderr logs injected into continuation contexts MUST be bounded to:
+  1. Exit code & Command;
+  2. First fatal error stack trace (capped at <= 30 lines);
+  3. SHA-256 evidence receipt digest.
+
 ## Long-stage efficiency and internal recovery
 
 When task, host, root, writer, inputs, and authority are already known, dispatch one

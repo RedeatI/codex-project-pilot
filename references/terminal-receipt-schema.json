@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TERMINAL_RECEIPT_V2_6",
+  "type": "object",
+  "required": [
+    "receipt_id",
+    "project",
+    "action_id",
+    "contract_version",
+    "terminal_status",
+    "timestamp",
+    "evidence"
+  ],
+  "properties": {
+    "receipt_id": { "type": "string" },
+    "project": { "type": "string" },
+    "action_id": { "type": "string" },
+    "contract_version": {
+      "type": "string",
+      "enum": ["PROJECT_TASK_CONTRACT_V2_5", "PROJECT_TASK_CONTRACT_V2_6_TURBO"]
+    },
+    "terminal_status": {
+      "type": "string",
+      "enum": [
+        "PASS_WITH_EVIDENCE",
+        "BLOCKED_WITH_EVIDENCE",
+        "UNKNOWN_TERMINAL",
+        "NO_SAFE_ACTION"
+      ]
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "evidence": {
+      "type": "object",
+      "required": ["exit_code", "first_error_summary", "evidence_sha256"],
+      "properties": {
+        "git_commit_sha": { "type": ["string", "null"] },
+        "changed_files_count": { "type": "integer" },
+        "exit_code": { "type": "integer" },
+        "command_executed": { "type": ["string", "null"] },
+        "first_error_summary": { "type": ["string", "null"] },
+        "log_excerpt_tail": { "type": ["string", "null"], "maxLength": 1000 },
+        "evidence_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "warning_summary": {
+      "type": "object",
+      "properties": {
+        "total_warnings": { "type": "integer" },
+        "whitelisted_ignored_count": { "type": "integer" },
+        "triage_notes": { "type": "string" }
+      }
+    },
+    "next_recommended_action": { "type": "string" }
+  },
+  "additionalProperties": false
+}

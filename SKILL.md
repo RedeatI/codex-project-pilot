@@ -10,6 +10,18 @@ host identity, or evidence boundaries.
 
 ## Operating loop
 
+---
+name: codex-project-pilot
+description: Coordinate several software projects or agent-owned workstreams with evidence-backed state, thread-topology controls, host and authority gates, deterministic admissions, progress ledgers, and safe next-action routing. Use for portfolio-wide planning, task-architecture audits, continuous advancement, recovery, or multi-repository GitHub publication; do not use for a single ordinary coding task.
+---
+
+# Codex Project Pilot
+
+Advance a portfolio toward the user's actual end state without losing authority,
+host identity, or evidence boundaries.
+
+## Operating loop
+
 1. Recover current state from runtime metadata, repositories, task status, retained
    evidence, and external readbacks. Treat summaries as leads, not proof.
 2. Maintain one portfolio manifest with stable project IDs, roots, host IDs, owner
@@ -17,39 +29,26 @@ host identity, or evidence boundaries.
    added, resumed, migrated, or rebalanced, also maintain an authoritative thread
    topology snapshot.
 3. Select the smallest set of independent, stage-complete next actions that
-   materially advances the portfolio. Prefer one complete project contract over a
-   sequence of half-step contracts when host, authority, input, and writer identity
-   are already known. Separate control-plane roles from project writers, keep one writer
-   lease per project, count nested workers as execution units, reserve control-plane
-   capacity before calculating a new-dispatch budget, and serialize migrations or
-   shared-state changes. A worker hidden inside an active controller turn still consumes
-   capacity and a writer lease; if its identity or count cannot be read back,
-   conservatively set new-dispatch budget to zero.
-   Prioritize complete implementation, integration, and acceptance-candidate actions
-   for the manifest's declared focus projects. Allocate new valid capacity to them
-   first only after effective-capacity, fresh-admission, authority, host/root, and
-   unique-writer gates pass. A priority label never justifies filler, duplicate tasks,
-   an invalid task/worktree, or an empty heartbeat.
-   Treat `max_active_turns` as a configured portfolio ceiling, never as proof of a
-   platform guarantee. If runtime provides a smaller authoritative ceiling, calculate
-   the effective ceiling as the smaller value. Capacity beyond
-   `baseline_max_active_turns` is surge capacity: dispatch it only to a complete,
-   effective project action with fresh admission `ZERO`, an exact action ID, and the
-   same independent project task holding the writer lease. Never fill surge capacity
-   with control roles, nested workers, empty helpers, duplicate work, or migration
-   bypasses.
-   When the runtime explicitly exposes neither numeric hard/effective capacity nor
+   materially advances the portfolio using `PROJECT_TASK_CONTRACT_V2_6_TURBO`.
+   Apply Asymmetric Dual-Core Compute Tiering: use GPT-5.6 Sol (`high reasoning`)
+   strictly for global scheduling, architecture partitions, and complex root-cause
+   diagnosis; use GPT-5.6 Terra as the primary workhorse for multi-file implementation
+   and logic assembly; use GPT-5.6 Luna for lightweight boilerplate, mechanics, and receipts.
+   Enable Elastic Uncapped Concurrency across isolated project repositories: dispatch all
+   unblocked, active projects in parallel waves with zero artificial concurrency bottlenecks,
+   while maintaining exclusive single-writer leases per project.
+   Enforce Build-Only Fast Track during multi-file coding: ban intermediate unit tests,
+   verify edits using sub-second syntax/type checks, and defer regression suites to stage
+   closeout.
+   Apply the 30-Second Stub & Bypass Protocol: after at most one failed repair on non-core
+   dependencies or flakiness, stub out the component, log to `.agents/BLOCKERS.md`, and
+   advance without halting.
+   Enforce the Zero-Progress Circuit Breaker: forbid duplicate test/build executions without
+   intervening code diffs (`max_zero_progress_retries = 1`).
+   Separate control-plane roles from project writers, keep one writer lease per project,
+   count nested workers as execution units, and reserve control-plane capacity.
+   When runtime explicitly exposes neither numeric hard/effective capacity nor
    nested-worker count, use `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` only when
-   the manifest authorizes it. Attempt one complete action at a time against an
-   existing idle unique owner; the platform's accepted turn or explicit rejection is
-   the per-slot evidence. Re-read active state and leases after each result, and stop
-   new dispatch on any rejection. Never infer a numeric cap, probe in parallel,
-   create a task/worktree, take over a writer, or use filler for this fallback.
-   Select the governance mode explicitly. In `federated_thin_kernel` mode, each
-   project owner owns project-local action selection, admission, recovery, tests,
-   delivery, and closeout inside its manifest authority envelope. The scheduler owns
-   only capacity, dependency, dispatch-policy, and efficiency proposals; it cannot
-   grant authority, write repositories or the ledger, control migrations, handle
    owner requests, or become a hidden root. Runtime supervision applies deterministic
    ledger, lifecycle, and migration rules, while the owner liaison carries exact
    exceptions to the user. Require manifest and topology governance modes to match;
