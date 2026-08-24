@@ -44,6 +44,10 @@ host identity, or evidence boundaries.
    2. Reuse existing codebase and stdlib first; 3. Minimal viable diff (write the minimum direct,
    concise code needed to satisfy the acceptance test).
 
+   Enforce Epic Batch Continuous Marathons: ban 30-second single-file micro-turns. A project turn
+   MUST execute an uninterrupted tool-calling loop that implements, typechecks, and git-commits
+   a batch checklist of 3-5 core modules before concluding the turn with a terminal receipt.
+
    Enforce Default-to-Recommended Auto-Advance: unless an action crosses strict owner redlines
    (production deployment, credential exposure, destructive database deletion, or forced git
    rewrites), when an architecture or design packet contains a recommended option (e.g. Option A),

@@ -27,7 +27,7 @@ AUTHORITIES=<exact granted authorities>
 AUTHORITY_ENVELOPE=<project-local decisions allowed and exact exclusions>
 INPUTS=<complete candidate/input identities and retained evidence ids>
 PRESERVED_STATE=<foreign dirty paths, retained candidates, evidence, and worktrees>
-OUTCOME=<smallest complete independently state-changing stage>
+OUTCOME=MULTI_MODULE_CONTINUOUS_EPIC_DELIVERY (Sequentially implement, verify, and git-commit 3-5 core modules in this single continuous turn)
 DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SECURITY
 
 TURBO_EXECUTION_CONTROLS
@@ -38,6 +38,7 @@ TURBO_EXECUTION_CONTROLS
 - WARNING_POLICY=WHITELIST_IGNORE_OR_TRIAGE_ONCE
 - BATCH_SLICING_MODE=DYNAMIC_RISK_TIERED (Low: 3-5 files; Medium: 1-2 files; High: 1 file instant check)
 - PONYTAIL_ANTI_OVER_ENGINEERING=ENFORCED (1. YAGNI: no speculative abstractions/factories; 2. Codebase reuse & stdlib first; 3. Minimal viable diff; 4. Compact direct implementations over complex wrapper layers)
+- CONTINUOUS_TURN_MARATHON=ENFORCED (Do NOT stop or conclude turn after one single file. Sequentially implement all planned modules in a continuous tool-calling loop)
 
 WARNING_TRIAGE_RULES
 - BLOCKING_BLACKLIST=[SecurityLeak, CompilerFatal, TypeCheckError, BrokenBuild, SchemaMismatch]
@@ -46,7 +47,7 @@ WARNING_TRIAGE_RULES
 
 FINAL_GOAL=<project goal from live manifest>
 CURRENT_STAGE=<current goal stage>
-NEXT_DELIVERABLE=<smallest stage-complete deliverable>
+NEXT_DELIVERABLE=<batch multi-module deliverable checklist (3-5 modules)>
 ACCEPTANCE_EVIDENCE=<required evidence IDs/types>
 AUTONOMOUS_DECISION_SCOPE=<implementation/test/build/mechanical/path/harness/small-project-architecture/local-git-closeout>
 STOP_CONDITIONS=<first-nonzero/scope-writer/owner-gate/circuit-breaker>
@@ -69,7 +70,7 @@ ROLE_BOUNDARY
   expansion, cross-project conflicts, or owner-only actions through the liaison.
 
 MANDATORY_OUTPUT_REQUIREMENT
-At the conclusion of this turn, emit exactly one structured JSON object conforming to `TERMINAL_RECEIPT_V2_6` containing the decisive exit code, git commit SHA, and SHA-256 evidence digest.
+Do NOT conclude the turn after editing a single file. Within this single turn, the agent MUST execute a continuous tool loop across all 3-5 target modules (edit -> typecheck -> git commit -> next module). Only after the entire batch is completed and committed, emit exactly one structured JSON object conforming to `TERMINAL_RECEIPT_V2_6`.
 ```
 
 ---
@@ -79,17 +80,15 @@ At the conclusion of this turn, emit exactly one structured JSON object conformi
 For rapid turn execution without redundant token overhead:
 
 ```text
-[TURBO_MICRO_DIRECTIVE]
+[TURBO_EPIC_CONTINUOUS_DIRECTIVE]
 PROJECT: {{PROJECT_NAME}} | STAGE: {{STAGE_ID}} | RISK: {{RISK_LEVEL}}
 TARGET: {{STAGE_DELIVERABLE_SUMMARY}}
 PATHS: {{OWNED_PATHS}}
 1. Ponytail Minimalist Rule: YAGNI! Reuse existing codebase & stdlib first. Zero redundant wrapper/factory bloat.
-2. Batch-implement all planned files directly. DO NOT run unit tests mid-implementation.
-3. Verify with fast compile/type-check only (<= 3s).
+2. Continuous Marathon: Do NOT stop after 1 file. Sequentially implement all 3-5 planned modules in this single turn.
+3. Fast Loop: For each module -> implement directly -> quick syntax/typecheck -> git commit -> proceed immediately to next module.
 4. On non-core failure after 1 attempt, apply Stub & Bypass into .agents/BLOCKERS.md.
-5. Simple Closeout: run focused validation suite once -> `git commit` -> `git status`.
-   NEVER write custom complex PowerShell/shell reflection scripts to self-verify receipts. A clean `git status` + valid `git log -1` is 100% sufficient.
-6. Emit TERMINAL_RECEIPT and roll forward to the next stage immediately!
+5. After all planned modules in the batch are committed, emit final TERMINAL_RECEIPT!
 ```
 
 ---
