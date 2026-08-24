@@ -10,18 +10,6 @@ host identity, or evidence boundaries.
 
 ## Operating loop
 
----
-name: codex-project-pilot
-description: Coordinate several software projects or agent-owned workstreams with evidence-backed state, thread-topology controls, host and authority gates, deterministic admissions, progress ledgers, and safe next-action routing. Use for portfolio-wide planning, task-architecture audits, continuous advancement, recovery, or multi-repository GitHub publication; do not use for a single ordinary coding task.
----
-
-# Codex Project Pilot
-
-Advance a portfolio toward the user's actual end state without losing authority,
-host identity, or evidence boundaries.
-
-## Operating loop
-
 1. Recover current state from runtime metadata, repositories, task status, retained
    evidence, and external readbacks. Treat summaries as leads, not proof.
 2. Maintain one portfolio manifest with stable project IDs, roots, host IDs, owner
@@ -30,216 +18,102 @@ host identity, or evidence boundaries.
    topology snapshot.
 3. Select the smallest set of independent, stage-complete next actions that
    materially advances the portfolio using `PROJECT_TASK_CONTRACT_V2_6_TURBO`.
-   Apply Asymmetric Dual-Core Compute Tiering: use GPT-5.6 Sol (`high reasoning`)
-   strictly for global scheduling, architecture partitions, and complex root-cause
-   diagnosis; use GPT-5.6 Terra as the primary workhorse for multi-file implementation
-   and logic assembly; use GPT-5.6 Luna for lightweight boilerplate, mechanics, and receipts.
+   Apply Asymmetric Dual-Core Compute Tiering:
+   - **GPT-5.6 Sol (`high reasoning`)**: Reserved strictly for global scheduling,
+     architecture partitioning, and complex root-cause diagnosis;
+   - **GPT-5.6 Terra**: Primary workhorse for high-throughput multi-file implementation,
+     business logic assembly, and type validation;
+   - **GPT-5.6 Luna / Light**: Lightweight boilerplate, mechanics, documentation, and receipts.
+   
    Enable Elastic Uncapped Concurrency across isolated project repositories: dispatch all
    unblocked, active projects in parallel waves with zero artificial concurrency bottlenecks,
    while maintaining exclusive single-writer leases per project.
+   
    Enforce Build-Only Fast Track during multi-file coding: ban intermediate unit tests,
-   verify edits using sub-second syntax/type checks, and defer regression suites to stage
-   closeout.
+   verify edits using sub-second syntax/type checks, and defer regression suites to stage closeout.
+   
    Apply the 30-Second Stub & Bypass Protocol: after at most one failed repair on non-core
    dependencies or flakiness, stub out the component, log to `.agents/BLOCKERS.md`, and
    advance without halting.
+   
    Enforce the Zero-Progress Circuit Breaker: forbid duplicate test/build executions without
    intervening code diffs (`max_zero_progress_retries = 1`).
+   
    Separate control-plane roles from project writers, keep one writer lease per project,
-   count nested workers as execution units, and reserve control-plane capacity.
-   When runtime explicitly exposes neither numeric hard/effective capacity nor
-   nested-worker count, use `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` only when
-   owner requests, or become a hidden root. Runtime supervision applies deterministic
-   ledger, lifecycle, and migration rules, while the owner liaison carries exact
-   exceptions to the user. Require manifest and topology governance modes to match;
-   fail closed to federated enforcement on a mismatch. Give the scheduler only the
-   declared read/capacity/dependency/dispatch/efficiency allowlist, and forbid every
-   control role from attaching to a project or holding a writer lease. Require
-   exactly one live scheduler, runtime supervisor, and owner liaison with both their
-   minimum authorities and maximum role allowlists. Reject control-plane authorities
-   inside a project envelope, and reserve project-local decision, admission, and
-   fresh-round authority for the live manifest owner alone. Every unfinished,
-   non-frozen federated project requires that live writer owner and all three
-   autonomy authorities in both manifest and owner task. Keep the stricter project
-   authority-subset gate federated-only so legacy root mode remains compatible. Do
-   not retain a persistent root controller. In legacy
-   `root_controller` mode, Root owns portfolio admission, authority, priority, stop
-   conditions, and major decisions but remains control-only. In either mode, project
-   implementation must run in the independent project task.
+   count nested workers as execution units, and reserve control-plane capacity before calculating
+   a new-dispatch budget.
+   
+   When runtime explicitly exposes neither numeric hard/effective capacity nor nested-worker
+   count, use `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` only when authorized. Attempt one
+   complete action at a time against an existing idle unique owner; the platform's accepted turn
+   or explicit rejection is the per-slot evidence.
+   
+   Select the governance mode explicitly:
+   - In `federated_thin_kernel` mode, each project owner owns project-local action selection,
+     admission, recovery, tests, delivery, and closeout inside its manifest authority envelope.
+     The scheduler owns only capacity, dependency, dispatch-policy, and efficiency proposals; it
+     cannot grant authority, write repositories or the ledger, control migrations, handle owner
+     requests, or become a hidden root. Runtime supervision applies deterministic ledger,
+     lifecycle, and migration rules, while the owner liaison carries exact exceptions to the user.
+     Require manifest and topology governance modes to match; fail closed to federated enforcement
+     on a mismatch. Give the scheduler only the declared read/capacity/dependency/dispatch/efficiency
+     allowlist, and forbid every control role from attaching to a project or holding a writer lease.
+     Require exactly one live scheduler, runtime supervisor, and owner liaison with both their
+     minimum authorities and maximum role allowlists. Reject control-plane authorities inside a
+     project envelope, and reserve project-local decision, admission, and fresh-round authority for
+     the live manifest owner alone.
+   - In legacy `root_controller` mode, Root owns portfolio admission, authority, priority, stop
+     conditions, and major decisions but remains control-only. In either mode, project
+     implementation must run in the independent project task.
+   
    At every completed project stage, keep the writer in that project task and close
-   `evidence -> test -> build -> diff -> readback -> commit -> push -> merge`. Record
-   an exact source branch, target branch, commit SHA, remote readback, and merge
-   readback. Mark build or merge `NOT_REQUIRED` only when the project contract proves
-   that fact. On unknown identity, foreign dirty paths, conflict, or the first
-   nonzero, stop once and mark every later step `UNEXECUTED`; never force push or
-   force merge. A legacy Root may decide authority or conflicts but cannot perform
-   the closeout; a federated project owner escalates only authority expansion or a
-   real cross-project conflict through the owner liaison.
+   `evidence -> test -> build -> diff -> readback -> commit -> push -> merge`. Record an exact
+   source branch, target branch, commit SHA, remote readback, and merge readback. Mark build or
+   merge `NOT_REQUIRED` only when the project contract proves that fact. On unknown identity,
+   foreign dirty paths, conflict, or the first nonzero, stop once and mark every later step
+   `UNEXECUTED`; never force push or force merge.
+   
    Treat context pressure as topology state: after compaction, audit the summary as
-   short/accurate/usable. If renewal is required, notify the sole migration
-   controller once; never use a fixed compaction count or let scheduling launch the
-   migration.
-   A user authorization for stuck-thread recovery is conditional, not a blanket
-   create/archive permission. `waiting`, ordinary latency, one idle turn, and unknown
-   state are not `stuck`. Require executor-owned proof of the exact old task, host,
-   root/worktree, frozen model/thinking, retained checkpoint, and terminal blocker.
-   Only the sole migration controller may acquire the one global lock, create one
-   provisional `HANDOFF_ONLY` successor under a materially different fresh admission,
-   obtain `HANDOFF_ACCEPTED`, transfer the writer lease exactly once, and recoverably
-   archive the preserved old task. Never delete the old task/worktree/evidence or
-   create a duplicate successor for the same target.
-   Treat willingness to consider moving a project between hosts as permission to
-   propose one exact request, not authority to move it. Prefer same-host recovery.
-   A cross-host request is eligible only when executor-owned evidence proves the
-   current host blocks the next admitted project action and the proposed target host
-   plus exact path can materially remove that blocker. Route the exact project/task,
-   source-host blocker, target host/path, frozen model/thinking, writer/candidate,
-   retained worktree/evidence, byte-preservation plan, single-lock plan, and rollback
-   plan through the owner liaison. Without a new exact user authorization, do not
-   change host, create a replacement, transfer the writer, or acquire the lock.
-   When a real blocker needs user judgment, a choice, login, desktop action, host
-   migration, or another owner-only action, notify the user promptly through the
-   owner liaison. State the exact blocker, why authorized automation cannot resolve
-   it, the smallest options, the recommendation, and the next step; never wait
-   silently. Resolve mechanical, path, harness, and scheduling issues internally
-   when existing authority suffices, without sending low-value owner messages.
+   short/accurate/usable. If renewal is required, notify the sole migration controller once; never
+   use a fixed compaction count or let scheduling launch the migration.
+   
+   A user authorization for stuck-thread recovery is conditional, not a blanket create/archive
+   permission. `waiting`, ordinary latency, one idle turn, and unknown state are not `stuck`.
+   Require executor-owned proof of the exact old task, host, root/worktree, frozen model/thinking,
+   retained checkpoint, and terminal blocker. Only the sole migration controller may acquire the
+   one global lock, create one provisional `HANDOFF_ONLY` successor under a materially different
+   fresh admission, obtain `HANDOFF_ACCEPTED`, transfer the writer lease exactly once, and
+   recoverably archive the preserved old task. Never delete old tasks/worktrees/evidence.
+   
+   Cross-host relocation remains proposal-only. Route the exact project/task, source-host blocker,
+   target host/path, frozen model/thinking, byte-preservation plan, single-lock plan, and rollback
+   plan through the owner liaison. Without a new exact user authorization, do not change host,
+   create a replacement, or transfer the writer.
+   
+   When a real blocker needs user judgment, notify the user promptly through the owner liaison.
+   State the exact blocker, why authorized automation cannot resolve it, minimal options, the
+   recommendation, and the next step.
 4. Before dispatch or mutation, evaluate the action against runtime readback. Use
-   `scripts/portfolio_control.py admit` when the action crosses hosts, writes a
-   repository, changes external state, or resumes after uncertain context.
-   Before every validation, name the blocker it removes or decision it changes and
-   the new evidence expected. If the result cannot change the next action, only
-   repeats still-valid evidence, or produces no new evidence, mark it `NOT_REQUIRED`
-   and do not run it. Keep mandatory safety, authority, publication, merge, release,
-   and first-time final readbacks. Prefer one high-information check over repeated
-   inspection. Treat model claims, plans, queues, static checks, local output, and
-   historical output as non-authoritative for remote, GitHub, merge, deployment, or
-   release state.
-5. Dispatch long contracts that cover the authorized stage from preflight through
-   implementation or diagnosis, decision-changing tests and build, diff/scope/secret
-   checks, readback, commit, non-force push, fast-forward merge, and remote/target
-   readback. Include exact task, host, root, branches, owned paths, authorities,
-   preserved state, explicit stopping conditions, `NOT_REQUIRED` evidence, and final
-   readback. Prefer this complete stage contract to serial half-step prompts. Use
-   `PROJECT_TASK_CONTRACT_V2_5`; do not interpret permission to continue as deploy,
-   release, credential, production-data, or destructive authority.
-   Project writers may use project-controlled non-writing helpers for bounded
-   diagnosis or evidence aggregation, but helpers cannot acquire a second writer
-   lease or mutate the repository. Authorized mechanical, path, harness, and evidence
-   issues stay inside the project/coordinator recovery loop. A first nonzero still
-   ends the current formal round; the coordinator derives one materially different
-   fresh round from retained evidence instead of abandoning the project or escalating
-   routine failures.
-   When a project's manifest and action contract both explicitly grant
-   `routine_public_network`, its owner may autonomously retrieve public dependencies,
-   consult public documentation, call read-only public APIs, fetch build resources,
-   and run network diagnostics inside the existing project scope. Record one minimum
-   envelope naming purpose, exact domains or URLs, write locations, no-credential
-   boundary, frequency, expected evidence, and stop condition. Credentials or private
-   data, production or real-user impact, destructive operations, publication or
-   deployment, cross-host migration, material scope/dependency expansion,
-   irreversible external writes, and major architecture direction remain owner gates.
-   Routine network authority never relaxes host/root identity, frozen settings,
-   writer or migration locks, first-nonzero behavior, secret checks, or publication
-   controls. Older manifests remain valid but have no routine network authority unless
-   they adopt the V2.4 or V2.5 policy and grant it per project.
-   A complete V2.4 or V2.5 autonomy block also enables continuous progress. After a stage
-   closes, the same project owner immediately plans and fresh-admits the next
-   stage-complete long contract. If one acceptance or external gate is temporarily
-   blocked, preserve it as `BLOCKED`, leave dependent later gates `UNEXECUTED`, and
-   select authorized feature, integration, test, documentation, performance, or
-   evidence work that does not depend on that gate. Never fabricate acceptance,
-   bypass safety/authority/publication evidence, repeat no-value work, or create
-   filler. Project-controlled helpers remain bounded by effective capacity and the
-   owner's envelope, and cannot acquire a second writer lease.
-   Under V2.5, every heartbeat derives current manifest, ledger, topology, capacity,
-   writer, and task evidence for every project. It does not require an existing
-   fresh-admitted action or pending wait before it can act. Classify each project as
-   `DISPATCHED`, `ALREADY_ACTIVE`, `OWNER_BLOCKED`, `NO_SAFE_ACTION`, or
-   `COMPLETE_FROZEN`; when the next stage is safe and already authorized, form the
-   minimum envelope, fresh-admit, and dispatch the unique owner/writer. Fill only
-   effective capacity with independent work. Recompute immediately after a terminal
-   stage, and never let one blocked or waiting project pause the others. Global
-   `WAITING` is valid only after the full sweep proves no safe action; route a true
-   owner-only blocker through the liaison. V2.4 manifests remain compatible but do
-   not claim a V2.5 sweep.
-   Every V2.5 project must also declare a `PROJECT_GOAL_CONTRACT` with final goal,
-   current stage, next deliverable, acceptance evidence, autonomous decision scope,
-   stop conditions, owner-only exceptions, and a terminal next-stage trigger.
-   Require `roll_forward_required=true` and `ordinary_recovery_autonomous=true`.
-   Ordinary mechanical, path, harness, and small project-local architecture recovery
-   stays with the writer. A terminal stage updates the goal and rolls forward before
-   the next dispatch. A missing goal is a governance conflict, not global waiting;
-   one blocked goal never pauses safe siblings.
-   Treat `goal_stalled`, `thread_idle`, and `completed_empty_output` as diagnosis
-   triggers, never completion or permission to abandon the project. Diagnose and
-   resume the original final goal/current objective, or select authorized feature,
-   integration, test, documentation, performance, or evidence work independent of
-   the blocker. A turn stop, idle state, empty output, or status-only update is not
-   progress.
-   Under `OWNER_LIAISON_ROUTING_V1`, every genuine owner-only or
-   `DECISION_REQUIRED` action uses one stable canonical `request_id` and only liaison
-   task `01a013cd-60f1-7f73-974e-3663f7297ad2` communicates it to the user. Root,
-   scheduler, runtime supervisor, and the exact project owner may create or reference
-   the packet but never ask directly. Require blocker, authority/evidence, minimal
-   options, recommendation, next step, same-ID response routing, delivery readback,
-   and delivery turn. The liaison deduplicates canonical IDs and aliases; the
-   governance/runtime response router may return the decision only to the exact
-   project owner. Mechanical/path/harness/small project-architecture recovery stays
-   local and must not escalate.
-   Treat multi-project start failure, heartbeat next-stage derivation or dispatch
-   failure, a parallelism anomaly, long-idle tasks caused by control state, or a
-   governance/user-goal conflict as a control-plane architecture escalation. Send a
-   timely owner-liaison packet with affected projects, root cause, architecture
-   options, recommended option, user-decision requirement, and immediate safe
-   actions; continue those safe actions for other projects. One project's ordinary
-   implementation failure stays project-local unless it crosses the existing
-   major-architecture owner gate. If a cross-project control conflict leaves no safe
-   action, use `OWNER_ATTENTION`, never silent `WAITING`.
-   Default to delivery-first staging: finish core functionality, integration, and
-   acceptance evidence before non-blocking deep security research. Record deferred
-   research as an explicit pre-release gate. Never defer known critical/high defects,
-   authentication or permission fail-closed checks, credential or destructive-data
-   risks, necessary dependency/supply-chain checks, or publication controls.
-6. Monitor deltas, not full transcripts. Classify approval, missing authority,
-   host mismatch, harness failure, product failure, and external-state waiting as
-   different outcomes. Project idle, a completed turn, or a first-nonzero terminal
-   ends only that round, not the project objective. Promptly derive the next safe
-   authorized action; use `WAITING` or `BLOCKED` only after authoritative proof that
-   no safe action exists or a named external/manual event is required. Suppress
-   half-step reports, unchanged status, queue reminders, and routine mechanical
-   failures; send compact batched dispatch/terminal deltas instead. Escalate only
-   genuine owner login/desktop/session work, credentials, external ownership choices,
-   destructive or high-impact action, host migration, security/architecture direction,
-   publication/release beyond current authority, or proven absence of a safe next
-   action. Deduplicate context-renewal notifications by target and
-   notification ID. Treat runtime idle as turn completion, not portfolio completion.
-   Require each active `running` monitor to renew an evidence-backed work lease by
-   admitting, dispatching, advancing ledger evidence, or recording a terminal result.
-   A plan, timestamp, topology snapshot, or no-change counter is not work. For V2.4
-   and older contracts, one empty running check routes to attention and one empty
-   waiting check prepares a pause. V2.5 performs another complete per-project sweep
-   at the next wake without falsely renewing the work lease from the sweep itself.
-   Before any pause, including `waiting`, deliver one deduplicated result or decision
-   notice through the declared owner liaison, wait for its matching closure and
-   delivery-turn readback, persist that delivery preceded the pause, and keep success
-   notifications user-visible. A controller final alone is not delivery proof. If delivery
-   fails, pausing is forbidden and the next run may retry only that same closure.
-7. Append material decisions and terminal results to the hash-chained portfolio
-   ledger. Recompute the next action from current evidence and continue while safe.
-8. Claim completion only after every requirement has authoritative evidence. Keep
-   the user's full goal active when any requirement remains unproved.
-
-A heartbeat is a bounded control trigger, not progress by itself. Under V2.5 it
-classifies every manifest project and performs or dispatches every safe independent
-action that fits effective capacity; its project sweep and `WORK_LEASE_READBACK`
-record the evidence. If none exists, it records global `WAITING` or
-`OWNER_ATTENTION` and enters the owner-liaison delivery gate when required. It never
-uses a status-only sweep, filler, duplicate admission, or blocked sibling project as
-progress.
-
-Automatic advancement never implies automatic permission. Obtain explicit user
-authorization before external writes, repository publication, release, credential
-use, destructive cleanup, or owner-only actions.
+   `scripts/portfolio_control.py admit` when the action crosses hosts, writes a repository,
+   changes external state, or resumes after uncertain context.
+   Before every validation, name the blocker it removes or decision it changes and the new
+   evidence expected. If the result cannot change the next action or only repeats still-valid
+   evidence, mark it `NOT_REQUIRED`.
+5. Dispatch long contracts covering the authorized stage through final target readback using
+   `PROJECT_TASK_CONTRACT_V2_6_TURBO`. Project writers may use project-controlled non-writing
+   helpers for bounded diagnosis, but helpers cannot acquire a second writer lease.
+   When explicitly authorized, a project owner may utilize `routine_public_network` within its
+   declared scope envelope. Credentials, private data, production impact, destructive actions,
+   publication, and deployment remain strict owner gates.
+   Under V2.6, every heartbeat sweep classifies projects and dispatches safe independent actions.
+   Every project declares a `PROJECT_GOAL_CONTRACT` with `roll_forward_required=true` and
+   `ordinary_recovery_autonomous=true`. A terminal stage updates the goal and rolls forward upon
+   generating a valid `TERMINAL_RECEIPT_V2_6`.
+6. Monitor deltas, not full transcripts. Bounded logs must retain only exit code, command, the first
+   fatal error stack trace (<= 30 lines), and SHA-256 evidence digests. Escalate genuine owner-only
+   actions through `OWNER_LIAISON_ROUTING_V1` under a stable canonical `request_id`.
+7. Append material decisions and terminal results to the hash-chained portfolio ledger.
+8. Claim completion only after every requirement has authoritative evidence.
 
 ## Modes and references
 
@@ -250,8 +124,9 @@ use, destructive cleanup, or owner-only actions.
 - When dispatching, recovering, migrating, or converging tasks, read
   [references/execution-contracts.md](references/execution-contracts.md).
 - When preparing a project execution prompt, read
-  [references/project-task-prompt-template.md](references/project-task-prompt-template.md)
-  and its linked Sol risk-calibration evidence.
+  [references/project-task-prompt-template.md](references/project-task-prompt-template.md).
+- When calibrating compute tiering and risk boundaries, read
+  [references/gpt-5p6-sol-risk-calibration.md](references/gpt-5p6-sol-risk-calibration.md).
 - When uploading or publishing repositories, read
   [references/github-publication.md](references/github-publication.md).
 
@@ -268,9 +143,4 @@ python scripts/portfolio_control.py append-event EVENTS.jsonl EVENT.json --expec
 python scripts/portfolio_control.py verify-ledger EVENTS.jsonl
 ```
 
-An admission `NONZERO` stops that formal round. Do not repair, retry, change entry
-points, or reinterpret it inside the same round. A later attempt needs a new action
-or round ID and a material difference recorded in the ledger.
-
-The ledger lock is fail-closed. Never delete a stale lock directory automatically;
-inspect the writer and retained evidence before an explicitly authorized recovery.
+An admission `NONZERO` stops that formal round. The ledger lock is fail-closed.

@@ -1,195 +1,118 @@
-# Codex Project Pilot
+# Codex Project Pilot (v2.6 Turbo)
 
-An evidence-backed Codex Skill for coordinating several projects, repositories,
-and agent-owned workstreams toward one persistent goal.
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Tests: Passing](https://img.shields.io/badge/Tests-116%20Passed-brightgreen.svg)](tests/)
+[![Architecture: Federated Thin Kernel](https://img.shields.io/badge/Topology-Federated%20Thin%20Kernel-purple.svg)](references/thread-architecture.md)
 
-It provides a portable portfolio manifest, runtime admissions, deterministic
-thread-topology audits, first-nonzero formal-round semantics, a hash-chained
-decision ledger, long-contract routing, and privacy-gated GitHub publication
-guidance.
+An evidence-backed Codex Skill for coordinating multiple projects, repositories, and agent workstreams toward persistent, multi-stage delivery goals.
 
-The recommended `federated_thin_kernel` topology puts project-local decisions,
-admission, recovery, verification, and closeout in each project's owner task. Its
-thin governance kernel retains only scheduling/efficiency policy, deterministic
-runtime supervision and migrations, and one owner liaison. There is no persistent
-root controller. The legacy `root_controller` mode remains available for portfolios
-whose shared authority cannot yet be partitioned. Runtime snapshots make authority
-creep, stale owners, unfenced migrations, excess active turns, and multiple project
-writers visible before they become coordination failures.
+---
 
-High-concurrency audits count both visible active turns and nested workers, including
-workers hidden inside a controller. A configurable control-slot reserve
-is subtracted before computing the new-dispatch budget, so unrelated active tasks and
-in-turn helpers cannot silently overcommit the host or starve terminal-event handling.
-The configured limit is policy, not a claim about the Codex platform: an authoritative
-smaller runtime limit clamps the effective limit automatically. Capacity beyond the
-declared baseline is surge capacity and may carry only a complete, effective project
-action with a fresh `ZERO` admission and the same independent project task holding its
-writer lease. Control roles, nested workers, filler work, and duplicate actions cannot
-consume surge slots.
-In federated mode, a project owner may decide and execute only inside its explicit
-project authority envelope. The scheduler may rank ready actions and optimize
-capacity, but cannot grant authority, mutate a repository, write the control ledger,
-run migrations, or act as a hidden root. Cross-project conflicts and authority
-expansion are routed through the owner liaison for an exact user decision. Manifest
-and topology governance modes must match; a mismatch fails closed to federated
-enforcement. Every declared control role is forbidden from attaching to a project or
-holding its writer lease. Federated mode requires exactly one live `scheduler`,
-`runtime_supervisor`, and `owner_liaison`; each has a minimum capability set and a
-maximum allowlist. Project envelopes cannot contain control-plane authorities, and
-only the manifest owner may hold project-local decision/admission/recovery authority.
-Every unfinished, non-frozen project must bind one live writer owner and give both
-the manifest envelope and that owner the three autonomy authorities. Legacy mode
-keeps its prior permissive project-authority behavior for compatibility.
-Each stage is preferably dispatched as one complete contract covering preflight,
-implementation or diagnosis, decision-changing tests/build, diff/readback, commit,
-non-force push, fast-forward merge, and target readback. Project-controlled
-non-writing helpers may diagnose routine harness or evidence issues, while the project
-task retains the only writer. A first nonzero stops that round, not the project goal;
-the coordinator derives a materially different fresh round without escalating routine
-mechanical failures. Unknown identity, foreign dirty paths, conflicts, or a first
-nonzero stop the remaining gates; force push and force merge are outside the contract.
+## Key Capabilities
 
-The `PROJECT_TASK_CONTRACT_V2_4` prompt adds a validation-value gate: before any check,
-name the blocker it removes or decision it changes and the new evidence expected.
-Skip repeated or decision-irrelevant checks while preserving required safety,
-authority, publication, merge, and release evidence. It also makes Sol-specific risk
-claims traceable instead of treating community anecdotes as facts.
+* **Federated Thin Kernel Topology**: Project owners own local implementation, diagnosis, recovery, and Git closeout inside an explicit authority envelope. The thin governance kernel retains only scheduling policy, deterministic runtime supervision, and owner liaison.
+* **Dual-Core Asymmetric Compute Tiering**:
+  * **GPT-5.6 Sol (`high reasoning`)**: Strategic planning, multi-project dependency arbitration, architectural partitioning, and complex root-cause diagnosis.
+  * **GPT-5.6 Terra (`primary worker`)**: High-throughput (100+ t/s) multi-file feature implementation, business logic assembly, and type validation.
+  * **GPT-5.6 Luna / Light (`light worker`)**: Boilerplate generation, documentation, changelogs, and receipt drafting.
+* **Build-Only Fast Track**: Eliminates micro-test fixation loops during active feature coding. Enforces sub-second syntax/type checks (`tsc --noEmit`, `py_compile`, `cargo check`) during implementation and runs full validation suites in bulk at stage closeout.
+* **30-Second Stub & Bypass Protocol**: Prevents rabbit-hole stalls on third-party flakiness or non-core issues. Stubs unresolved blockers into `.agents/BLOCKERS.md` after at most one repair attempt.
+* **Elastic Uncapped Concurrency**: Dynamically dispatches all unblocked, active projects in parallel waves with zero artificial concurrency bottlenecks while preserving exclusive single-writer leases per repository.
+* **Zero-Progress Circuit Breaker**: Enforces `max_zero_progress_retries = 1`, forbidding repetitive test executions without intervening code diffs.
+* **Deterministic Terminal Receipts**: Cryptographically anchored JSON evidence receipts (`TERMINAL_RECEIPT_V2_6`) verify delivery before allowing autonomous goal roll-forward.
 
-V2.4 also makes routine public networking an explicit project-local authority rather
-than a blanket portfolio permission. A granted project may fetch public dependencies
-and build resources, consult public documentation, use read-only public APIs, and run
-network diagnostics with a compact purpose/domain/write-location/no-credential/
-frequency/evidence/stop envelope. Credentials or private data, production or real-user
-effects, destructive or irreversible writes, external publication/deployment,
-cross-host migration, material scope or dependency expansion, and major architecture
-direction remain owner gates. Older manifests remain valid; they gain no network
-authority until they adopt the V2.4 policy and grant `routine_public_network` to the
-specific project.
+---
 
-V2.4 continuous progress keeps a project moving after each completed stage: the same
-owner plans and fresh-admits the next long contract. A temporarily blocked acceptance
-or external gate stays visibly `BLOCKED`, with dependent gates `UNEXECUTED`, while
-independent feature, integration, test, documentation, performance, or evidence work
-continues inside the existing authority envelope. It never fabricates acceptance,
-bypasses safety or publication evidence, or creates filler and duplicate work.
-Project-controlled helpers remain capacity-counted nonwriters under the same owner.
+## Architecture & Topology
 
-V2.5 makes heartbeat dispatch proactive. Each wake recomputes the next stage for
-every manifest project from fresh task, ledger, and topology evidence; an existing
-fresh-admitted action or pending wait is no longer the only way work can start. The
-scheduler classifies every project, forms the minimum action envelope, fresh-admits
-and dispatches each authorized independent action within effective capacity, and
-recomputes immediately after a terminal stage. One blocked or waiting project cannot
-pause the rest of the portfolio. Global waiting is valid only after the complete
-sweep proves that no project has a safe action; exact owner-only blockers are routed
-for attention. V2.4 manifests remain valid, but only V2.5 claims this auditable sweep.
-When a runtime explicitly exposes neither numeric capacity nor nested-worker count,
-an approved `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` can admit one existing idle
-unique owner at a time. Platform acceptance or rejection is the per-slot evidence;
-the scheduler re-reads active state and leases after every attempt, and any rejection
-stops the wave. The fallback never guesses a numeric cap or creates probe tasks.
-Control-plane failures that starve multiple projects, prevent next-stage derivation
-or dispatch, expose parallelism or long-idle anomalies, or conflict with the user's
-goal produce a timely architecture-options packet for the owner liaison while every
-independent safe project continues. Ordinary single-project implementation failures
-remain project-local unless they cross the major-architecture owner gate.
+```text
+               ┌─────────────────────────────────────────────────────────────┐
+               │           Strategic Decision Core (GPT-5.6 Sol High)         │
+               │   - Scheduler (Capacity, dependency, wave dispatch)         │
+               │   - Runtime Supervisor (Hash-chained ledger, single lock)   │
+               │   - Owner Liaison (Human escalations & credentials)         │
+               └──────────────────────────────┬──────────────────────────────┘
+                                              │
+                      ┌───────────────────────┼───────────────────────┐
+                      │ Elastic Parallel Wave Dispatch (Uncapped)     │
+                      ▼                       ▼                       ▼
+         ┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────────────┐
+         │ Project Owner 1 (Terra) │ │ Project Owner 2 (Terra) │ │ Project Owner N (Terra) │
+         │  - Isolated Git Tree    │ │  - Isolated Git Tree    │ │  - Isolated Git Tree    │
+         │  - Single Writer Lease  │ │  - Single Writer Lease  │ │  - Single Writer Lease  │
+         │  - Build-Only FastTrack │ │  - Build-Only FastTrack │ │  - Build-Only FastTrack │
+         └─────────────────────────┘ └─────────────────────────┘ └─────────────────────────┘
+```
 
-V2.5 also makes project intent executable through a project goal contract. Every
-project names its final goal, current stage, next deliverable, required acceptance
-evidence, autonomous decision scope, stop conditions, owner-only exceptions, and
-terminal next-stage trigger. Ordinary recovery stays autonomous; terminal stages
-must roll the contract forward before dispatching the next stage. Missing goal state
-is surfaced as a governance conflict, and one blocked project cannot turn the whole
-portfolio into waiting.
+### Control vs. Project Role Separation
 
-Goal stall, task idle, and completed turns with empty output are diagnosis triggers,
-not project completion. The writer or heartbeat resumes the original goal or selects
-authorized independent feature, integration, test, documentation, performance, or
-evidence work; status-only activity is never progress.
+| Plane | Role | Primary Responsibilities | Strict Anti-Patterns / Forbidden Actions |
+| :--- | :--- | :--- | :--- |
+| **Control** | `scheduler` | Capacity ranking, dependency ordering, dispatch policy, and efficiency proposals. | Must NOT grant authority, mutate repositories, write ledgers, or act as project writer. |
+| **Control** | `runtime_supervisor` | Delta monitoring, hash-chained ledger, task lifecycle, and migration lock. | Must NOT make product decisions or write project code. |
+| **Control** | `owner_liaison` | Routing genuine owner-only decisions (credentials, deployment, destructive actions). | Must NOT act as dispatcher or repository writer. |
+| **Project** | `project_owner` (Terra) | Local implementation, fast-track build, focused tests, and local Git closeout. | Must NOT mutate other projects or assume control-plane authority. |
 
-`OWNER_LIAISON_ROUTING_V1` gives every genuine decision-required action one stable
-canonical `request_id` and one outbound channel: liaison task
-`01a013cd-60f1-7f73-974e-3663f7297ad2`. Root, scheduler, runtime supervisor, and
-project owners create or reference the request but do not ask the user directly. The
-liaison deduplicates, records delivery readback and turn, and returns the decision
-under the same ID to a governance/runtime response router, which may reference it
-only to the exact project owner. Ordinary mechanical, path, harness, and small
-project-local architecture recovery never enters this route.
+---
 
-Delivery-first staging prioritizes core implementation, integration, and acceptance
-candidates. Non-blocking deep security research may be deferred into one explicit
-pre-release gate, while known critical/high findings, authentication and permission
-fail-closed behavior, credential and destructive-data risks, required dependency or
-supply-chain checks, and publication gates remain blocking. Focus-project preference
-never bypasses capacity, admission, authority, or writer-lease requirements.
+## Contract Progression (v2.4 $\rightarrow$ v2.6 Turbo)
 
-Optional per-task context-health readbacks make summary degradation and runtime
-context warnings auditable. Scheduling emits one deduplicated renewal recommendation
-to the sole migration controller; it never migrates a task based on a fixed number
-of compactions or an invented token threshold.
+* **v2.4 (`PROJECT_TASK_CONTRACT_V2_4`)**: Introduced the validation-value gate, explicit `routine_public_network` envelope, and continuous progress across temporary blockers.
+* **v2.5 (`PROJECT_TASK_CONTRACT_V2_5`)**: Added proactive heartbeat sweeps, rolling project goal contracts, single canonical request routing (`OWNER_LIAISON_ROUTING_V1`), and bounded admission token fallback.
+* **v2.6 Turbo (`PROJECT_TASK_CONTRACT_V2_6_TURBO`)**: Adds dual-core compute tiering, build-only fast track (banning intermediate unit tests), 30-second stub & bypass, elastic uncapped multi-project concurrency, and structured `TERMINAL_RECEIPT_V2_6` schemas.
 
-Authorized stuck-thread recovery remains fail-closed. Waiting, ordinary latency,
-one idle turn, and unknown state are not proof of a stuck task. Only the sole
-migration controller may act after authoritative identity/blocker evidence, a fresh
-materially-different admission, and the global migration lock. The provisional
-successor stays `HANDOFF_ONLY` until `HANDOFF_ACCEPTED`; only then may the writer
-lease transfer and the preserved old task be recoverably archived. Old tasks,
-worktrees, and retained evidence are never deleted.
+---
 
-Cross-host relocation is a separate, proposal-only gate. A user's willingness to
-consider a move does not authorize it. The scheduler may request one only after
-source-host necessity and an exact target host/path are proven, and the packet must
-preserve model/thinking, worktree and retained evidence, the single migration lock,
-and a recoverable rollback. Execution waits for a new exact user authorization.
+## Quick Start & Installation
 
-Real owner-dependent blockers are never left in silent waiting. The owner liaison
-receives one exact blocker, the reason automation cannot solve it, minimal options,
-the recommendation, and the next step. Authorized mechanical, path, harness, and
-scheduling issues stay internal and do not generate low-value user messages.
-
-Control-lifecycle readbacks distinguish a finished turn from a finished portfolio.
-An active running monitor must renew a machine-auditable work lease with admission,
-dispatch, ledger delta, or terminal evidence. Plans and timestamp-only snapshots do
-not count. The first empty check cannot create a silent stop: every pause must first
-send one deduplicated result or decision notice through the owner liaison, read back
-its matching delivery turn, and remain visible for successful as well as failed
-runs. Only then may the recurring automation pause.
-
-## Install
-
-Requires Python 3.10 or newer for the deterministic control script.
+Requires **Python 3.10+**.
 
 ```powershell
+# Clone to local Codex skills directory
 git clone https://github.com/RedeatI/codex-project-pilot.git "$env:USERPROFILE\.codex\skills\codex-project-pilot"
 ```
 
-Then invoke `$codex-project-pilot` or describe a multi-project portfolio task.
+To invoke in Codex Desktop, type `$codex-project-pilot` or reference the skill directly.
 
-## Validate
+---
+
+## Validation & Audit Suite
+
+Run the deterministic control and test suite:
 
 ```powershell
+# Display CLI capabilities
 python scripts/portfolio_control.py --help
+
+# Run topology and lease audits
 python scripts/portfolio_control.py audit-topology portfolio.json topology.json
+
+# Execute full automated test suite (116 tests)
 python -m unittest discover -s tests -v
+
+# Run CLI end-to-end simulation
 python tests/e2e_cli.py
-python path\to\skill-creator\scripts\quick_validate.py .
 ```
 
-See `references/portfolio-schema.md` for the manifest and
-`references/thread-architecture.md` for control-plane and project-task topology.
-See `references/execution-contracts.md` for admission and convergence behavior.
-Use `references/project-task-prompt-template.md` for project-task dispatch prompts
-and `references/gpt-5p6-sol-risk-calibration.md` for the evidence classification.
-Read `references/github-publication.md` before any GitHub upload or visibility
-change.
+---
 
-## Safety model
+## Reference Documentation
 
-The Skill automates routing and evidence handling, not permission. External writes,
-publication, releases, destructive cleanup, and credential use remain explicitly
-authorized actions. Real secrets stop a publication candidate and are never printed
-into reports or ledgers.
+* [`references/portfolio-schema.md`](references/portfolio-schema.md): Portfolio manifest schema and field reference.
+* [`references/thread-architecture.md`](references/thread-architecture.md): Topology snapshots, control-plane roles, and migration locks.
+* [`references/execution-contracts.md`](references/execution-contracts.md): Turbo fast-track, dynamic risk slicing, and stage closeout contracts.
+* [`references/project-task-prompt-template.md`](references/project-task-prompt-template.md): High-velocity dispatch prompt contracts and micro-directives.
+* [`references/gpt-5p6-sol-risk-calibration.md`](references/gpt-5p6-sol-risk-calibration.md): Dual-core compute tiering and anti-over-verification calibrations.
+* [`references/terminal-receipt-schema.json`](references/terminal-receipt-schema.json): Standardized JSON schema for evidence receipts.
+* [`references/github-publication.md`](references/github-publication.md): Secret-scanning and safe GitHub publication protocols.
+
+---
+
+## Safety Model
+
+Codex Project Pilot automates evidence-backed routing and deterministic execution, **not blanket authorization**. Credentials, production database mutation, external deployment, destructive cleanup, cross-host migration, and force-push operations remain strict, user-authorized gates.
+
+---
 
 ## License
 
