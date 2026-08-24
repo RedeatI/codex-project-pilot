@@ -87,7 +87,9 @@ PATHS: {{OWNED_PATHS}}
 2. Batch-implement all planned files directly. DO NOT run unit tests mid-implementation.
 3. Verify with fast compile/type-check only (<= 3s).
 4. On non-core failure after 1 attempt, apply Stub & Bypass into .agents/BLOCKERS.md.
-5. Run focused validation suite once at stage end -> Git Commit -> Emit TERMINAL_RECEIPT.
+5. Simple Closeout: run focused validation suite once -> `git commit` -> `git status`.
+   NEVER write custom complex PowerShell/shell reflection scripts to self-verify receipts. A clean `git status` + valid `git log -1` is 100% sufficient.
+6. Emit TERMINAL_RECEIPT and roll forward to the next stage immediately!
 ```
 
 ---
