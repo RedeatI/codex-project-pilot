@@ -38,6 +38,17 @@ host identity, or evidence boundaries.
    
    Enforce the Zero-Progress Circuit Breaker: forbid duplicate test/build executions without
    intervening code diffs (`max_zero_progress_retries = 1`).
+
+   Enforce Default-to-Recommended Auto-Advance: unless an action crosses strict owner redlines
+   (production deployment, credential exposure, destructive database deletion, or forced git
+   rewrites), when an architecture or design packet contains a recommended option (e.g. Option A),
+   the scheduler and project owner MUST automatically adopt the recommendation, record the
+   decision in the ledger as auto-resolved, and continue the next coding stage without halting
+   unattended pipelines.
+
+   Enforce Fault-Tolerant Independent Sibling Sweeps: an unresolved decision or validation pause
+   in Project A MUST NOT abort the heartbeat sweep for Project B and Project C. The scheduler
+   evaluates each active unblocked project independently and dispatches all ready workstreams.
    
    Separate control-plane roles from project writers, keep one writer lease per project,
    count nested workers as execution units, and reserve control-plane capacity before calculating
