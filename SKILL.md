@@ -39,6 +39,11 @@ host identity, or evidence boundaries.
    Enforce the Zero-Progress Circuit Breaker: forbid duplicate test/build executions without
    intervening code diffs (`max_zero_progress_retries = 1`).
 
+   Enforce the Ponytail Anti-Over-Engineering Protocol: write code like a pragmatic senior engineer.
+   Follow the strict decision ladder: 1. YAGNI (eliminate speculative abstractions and factory bloat);
+   2. Reuse existing codebase and stdlib first; 3. Minimal viable diff (write the minimum direct,
+   concise code needed to satisfy the acceptance test).
+
    Enforce Default-to-Recommended Auto-Advance: unless an action crosses strict owner redlines
    (production deployment, credential exposure, destructive database deletion, or forced git
    rewrites), when an architecture or design packet contains a recommended option (e.g. Option A),

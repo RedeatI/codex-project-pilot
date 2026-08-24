@@ -37,6 +37,7 @@ TURBO_EXECUTION_CONTROLS
 - STUB_AND_BYPASS_TIMEOUT=1_ATTEMPT_MAX (Mock/stub unresolved non-core blockers into .agents/BLOCKERS.md)
 - WARNING_POLICY=WHITELIST_IGNORE_OR_TRIAGE_ONCE
 - BATCH_SLICING_MODE=DYNAMIC_RISK_TIERED (Low: 3-5 files; Medium: 1-2 files; High: 1 file instant check)
+- PONYTAIL_ANTI_OVER_ENGINEERING=ENFORCED (1. YAGNI: no speculative abstractions/factories; 2. Codebase reuse & stdlib first; 3. Minimal viable diff; 4. Compact direct implementations over complex wrapper layers)
 
 WARNING_TRIAGE_RULES
 - BLOCKING_BLACKLIST=[SecurityLeak, CompilerFatal, TypeCheckError, BrokenBuild, SchemaMismatch]
@@ -82,10 +83,11 @@ For rapid turn execution without redundant token overhead:
 PROJECT: {{PROJECT_NAME}} | STAGE: {{STAGE_ID}} | RISK: {{RISK_LEVEL}}
 TARGET: {{STAGE_DELIVERABLE_SUMMARY}}
 PATHS: {{OWNED_PATHS}}
-1. Batch-implement all planned files first. DO NOT run unit tests mid-implementation.
-2. Verify with fast compile/type-check only (<= 3s).
-3. On non-core failure after 1 attempt, apply Stub & Bypass into .agents/BLOCKERS.md.
-4. Run focused validation suite once at stage end -> Git Commit -> Emit TERMINAL_RECEIPT.
+1. Ponytail Minimalist Rule: YAGNI! Reuse existing codebase & stdlib first. Zero redundant wrapper/factory bloat.
+2. Batch-implement all planned files directly. DO NOT run unit tests mid-implementation.
+3. Verify with fast compile/type-check only (<= 3s).
+4. On non-core failure after 1 attempt, apply Stub & Bypass into .agents/BLOCKERS.md.
+5. Run focused validation suite once at stage end -> Git Commit -> Emit TERMINAL_RECEIPT.
 ```
 
 ---
