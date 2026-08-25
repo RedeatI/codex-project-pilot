@@ -55,9 +55,16 @@ host identity, or evidence boundaries.
    decision in the ledger as auto-resolved, and continue the next coding stage without halting
    unattended pipelines.
 
+   Enforce End-State Goal Macro Dispatch Protocol (宏观目标驱动调度):
+   - **Controller Deep Analysis**: For each project thread, the Central Controller analyzes the exact codebase baseline, Git commits, open technical debt, and required business scope.
+   - **Target Product End-State Directive**: Controller issues a comprehensive Goal directive (`PROJECT_END_STATE_GOAL_DIRECTIVE`) explicitly specifying the target product end-state (full UX interactivity, complete data pipelines, production-grade error resilience, and strictly-typed clean code).
+   - **Autonomous Multi-Module Execution**: Project workers execute the Goal directive in an uninterrupted loop (batch coding -> fast-track syntax/type checks -> atomic git commits) to drive the product to completion.
+   - **Exception-Only Escalation (重大错误向总控汇报)**: Minor compile/test glitches, dependency warnings, and transient tool issues must be self-healed locally. Workers ONLY escalate back to Controller when encountering Critical Blockers (unrecoverable platform errors, cross-project structural conflicts, or strict redline requirements).
+
    Enforce Fault-Tolerant Independent Sibling Sweeps: an unresolved decision or validation pause
    in Project A MUST NOT abort the heartbeat sweep for Project B and Project C. The scheduler
    evaluates each active unblocked project independently and dispatches all ready workstreams.
+
    
    Separate control-plane roles from project writers, keep one writer lease per project,
    count nested workers as execution units, and reserve control-plane capacity before calculating
@@ -87,11 +94,12 @@ host identity, or evidence boundaries.
      implementation must run in the independent project task.
    
    At every completed project stage, keep the writer in that project task and close
-   `evidence -> test -> build -> diff -> readback -> commit -> push -> merge`. Record an exact
-   source branch, target branch, commit SHA, remote readback, and merge readback. Mark build or
-   merge `NOT_REQUIRED` only when the project contract proves that fact. On unknown identity,
-   foreign dirty paths, conflict, or the first nonzero, stop once and mark every later step
-   `UNEXECUTED`; never force push or force merge.
+    `evidence -> test -> build -> diff -> readback -> commit -> push -> merge`. Record an exact
+    source branch, target branch, commit SHA, remote readback, and merge readback. Mark build or
+    merge `NOT_REQUIRED` only when the project contract proves that fact. On unknown identity,
+    foreign dirty paths, conflict, or unrecoverable fatal errors, stop once and isolate that specific
+    project stage while sibling projects continue independently; apply bounded auto-recovery for transient
+    or repairable errors; never force push or force merge.
    
    Treat context pressure as topology state: after compaction, audit the summary as
    short/accurate/usable. If renewal is required, notify the sole migration controller once; never

@@ -52,6 +52,12 @@ Batch implementations based on operational blast radius rather than arbitrary si
   2. First fatal error stack trace (capped at <= 30 lines);
   3. SHA-256 evidence receipt digest.
 
+### 6. End-State Goal Directives & Exception-Only Escalation
+- **Central Controller Specific Analysis**: The Central Controller evaluates each project thread individually (examining recent Git commits, open issues, and missing feature gaps) before issuing an End-State Goal Directive (`PROJECT_END_STATE_GOAL_DIRECTIVE`).
+- **Target Product End-State**: The Directive sets an unambiguous target for the finished product state (e.g. complete interactive UI, reliable backend persistence, zero compilation errors, full test coverage).
+- **Autonomous Multi-Module Closed Loop**: The Project Worker independently implements the required multi-file changes, runs fast syntax/type checks, resolves minor errors locally, and commits atomic Git commits in a continuous tool loop.
+- **Exception-Only Escalation Protocol**: The Worker reports back to the Controller ONLY when encountering Critical Blockers (unrecoverable platform crashes, architecture deadlocks, credential/security redlines). All other transient or code-level errors are resolved locally via self-healing.
+
 ## Long-stage efficiency and internal recovery
 
 When task, host, root, writer, inputs, and authority are already known, dispatch one
@@ -67,16 +73,11 @@ State exact owned paths, branches, retained and foreign state, stop conditions, 
 evidence that permits any `NOT_REQUIRED` gate, and the terminal readback before
 dispatch. Project-controlled helpers may perform bounded read-only diagnosis or
 evidence aggregation, but the existing project task retains the only writer lease and
-all repository mutation.
-
-Do not interrupt a portfolio controller or the user for ordinary path, harness,
-parser, missing-tool, or
-mechanically decidable failures. The first formal/native nonzero ends that round and
-later gates are `UNEXECUTED`; it does not end the project objective. The coordinator
-uses retained evidence to derive one materially different action ID and fresh
-admission, then resumes the same writer unless authoritative evidence proves it is
-stuck. Send compact batched dispatch and terminal deltas. Escalate only genuine login,
-desktop or session recovery, credentials, external ownership or branch choices not
+all repository mutation. Apply Sibling Project Fault Isolation: a localized failure in one project
+stage isolates only that project and triggers bounded self-healing without aborting sibling project pipelines.
+The coordinator uses retained evidence to derive fresh admission, then resumes the same writer unless
+authoritative evidence proves it is stuck. Send compact batched dispatch and terminal deltas. Escalate only
+genuine login, desktop or session recovery, credentials, external ownership or branch choices not
 derivable from authority, destructive/high-impact work, host migration,
 security/architecture direction, publication or release beyond current authority, or
 authoritative proof that no safe next action exists.

@@ -48,5 +48,6 @@ To balance maximum execution velocity with strict delivery quality and prevent l
 1. Treat model statements, plans, client queues, static checks, local results, and historical results as claims until the required authoritative readback exists.
 2. Before every validation, name `DECISION_UNLOCKED` and `NEW_EVIDENCE_EXPECTED`. Skip checks that cannot change the next decision.
 3. Keep Root control-only. Implementation and all project evidence production stay in the admitted project task holding the unique writer lease.
-4. Stop a formal round at its first native nonzero and mark later steps `UNEXECUTED`. A new round needs fresh admission and a materially different action.
+4. Apply Sibling Project Fault Isolation & Continuous Progress: a localized failure or error in one project stage isolates only that project and triggers bounded self-healing, without aborting sibling project pipelines.
 5. Apply fail-closed authority and security boundaries. Permission to continue is not permission to deploy, release, access credentials, or use production data.
+

@@ -7,7 +7,32 @@ Use this high-velocity, risk-tiered contract for multi-project engineering execu
 
 ---
 
-## 1. PROJECT_TASK_CONTRACT_V2_6_TURBO (Active Standard)
+## 1. PROJECT_END_STATE_GOAL_DIRECTIVE (Primary Macro Standard)
+
+```text
+[PROJECT_END_STATE_GOAL_DIRECTIVE]
+PROJECT: {{PROJECT_NAME}} (ID: {{PROJECT_ID}})
+HOST: {{HOST_ID}} | ROOT: {{PROJECT_ROOT}}
+CURRENT_GIT_BASELINE: HEAD={{CURRENT_GIT_HEAD}} | STATUS={{CLEAN_OR_DIRTY}}
+
+【CONTROLLER CONTEXT ANALYSIS】
+{{CONTROLLER_DETAILED_ANALYSIS_OF_CURRENT_STATE_AND_GAPS}}
+
+【TARGET PRODUCT END-STATE】
+{{EXPLICIT_SPECIFICATION_OF_FINISHED_PRODUCT_FORM_AND_CAPABILITIES}}
+
+【AUTONOMOUS MULTI-MODULE EXECUTION DIRECTIVES】
+1. Ponytail Anti-Over-Engineering: YAGNI! Reuse existing codebase and stdlib first. Minimal viable diffs.
+2. Continuous Epic Marathon: Do NOT stop after single-file edits. Implement, typecheck, and commit the complete batch of core modules in a continuous tool-calling loop.
+3. Fast-Track Verification: Sub-second syntax and type checks (e.g. vue-tsc, cargo check, py_compile) during active coding; defer comprehensive validation to stage completion.
+4. Exception-Only Escalation: Minor errors, dependency warnings, and transient harness issues MUST be resolved or bypassed locally. Escalate to Central Controller ONLY upon encountering Critical Blockers (unrecoverable system faults, architecture deadlocks, credential/security redlines).
+5. Terminal Delivery: On reaching the defined product end-state, run stage closeout verification and produce structured TERMINAL_RECEIPT_V2_6.
+```
+
+---
+
+## 2. PROJECT_TASK_CONTRACT_V2_6_TURBO (Detailed Specification)
+
 
 ```text
 PROJECT_TASK_CONTRACT_V2_6_TURBO
