@@ -23,9 +23,9 @@ CURRENT_GIT_BASELINE: HEAD={{CURRENT_GIT_HEAD}} | STATUS={{CLEAN_OR_DIRTY}}
 
 【AUTONOMOUS MULTI-MODULE EXECUTION DIRECTIVES】
 1. Ponytail Anti-Over-Engineering: YAGNI! Reuse existing codebase and stdlib first. Minimal viable diffs.
-2. Continuous Epic Marathon: Do NOT stop after single-file edits. Implement, typecheck, and commit the complete batch of core modules in a continuous tool-calling loop.
-3. Fast-Track Verification: Sub-second syntax and type checks (e.g. vue-tsc, cargo check, py_compile) during active coding; defer comprehensive validation to stage completion.
-4. Exception-Only Escalation: Minor errors, dependency warnings, and transient harness issues MUST be resolved or bypassed locally. Escalate to Central Controller ONLY upon encountering Critical Blockers (unrecoverable system faults, architecture deadlocks, credential/security redlines).
+2. Long-Goal Continuous Execution: Complete one or two cohesive, substantial modules end to end; do not stop after a cosmetic single-file edit or a status summary.
+3. Evidence-Driven Verification: Use fast syntax/type/build checks for feedback and run focused tests whenever they materially reduce correctness, compatibility, data-integrity, or security risk. Finish with the decisive focused/full gates required by acceptance.
+4. Exception-Only Escalation: Resolve ordinary code, dependency, and harness problems locally without hiding them behind mocks or stubs. Escalate only unrecoverable system faults, architecture deadlocks, or credential/security/owner-only boundaries.
 5. Terminal Delivery: On reaching the defined product end-state, run stage closeout verification and produce structured TERMINAL_RECEIPT_V2_6.
 ```
 
@@ -52,18 +52,17 @@ AUTHORITIES=<exact granted authorities>
 AUTHORITY_ENVELOPE=<project-local decisions allowed and exact exclusions>
 INPUTS=<complete candidate/input identities and retained evidence ids>
 PRESERVED_STATE=<foreign dirty paths, retained candidates, evidence, and worktrees>
-OUTCOME=MULTI_MODULE_CONTINUOUS_EPIC_DELIVERY (Sequentially implement, verify, and git-commit 3-5 core modules in this single continuous turn)
+OUTCOME=LONG_GOAL_CONTINUOUS_DELIVERY (Implement, integrate, verify, and locally close out 1-2 cohesive substantial modules)
 DELIVERY_PRIORITY=CORE_FUNCTION|INTEGRATION|ACCEPTANCE_CANDIDATE|PRE_RELEASE_SECURITY
 
 TURBO_EXECUTION_CONTROLS
-- FAST_TRACK_MODE=BUILD_ONLY_DURING_IMPL (Prohibit intermediate unit/integration tests during multi-file coding)
-- VERIFICATION_AT_IMPL=SUB_SECOND_SYNTAX_TYPECHECK_ONLY (e.g. tsc --noEmit, py_compile, cargo check)
-- MAX_ZERO_PROGRESS_RETRIES=1 (Zero-progress command retry limit)
-- STUB_AND_BYPASS_TIMEOUT=1_ATTEMPT_MAX (Mock/stub unresolved non-core blockers into .agents/BLOCKERS.md)
+- VERIFICATION_MODE=DECISION_RELEVANT (fast syntax/type/build feedback plus focused tests whenever risk or evidence requires them)
+- RETRY_MODE=HYPOTHESIS_DRIVEN (no fixed retry limit; change hypothesis, implementation, harness, environment, or evidence target before repeating)
+- REAL_DEPENDENCY_POLICY=NO_CONCEALMENT (never hide real dependency, compatibility, security, identity, authorization, data-integrity, schema, build, or core-logic failures behind mocks/stubs/bypasses)
 - WARNING_POLICY=WHITELIST_IGNORE_OR_TRIAGE_ONCE
 - BATCH_SLICING_MODE=DYNAMIC_RISK_TIERED (Low: 3-5 files; Medium: 1-2 files; High: 1 file instant check)
 - PONYTAIL_ANTI_OVER_ENGINEERING=ENFORCED (1. YAGNI: no speculative abstractions/factories; 2. Codebase reuse & stdlib first; 3. Minimal viable diff; 4. Compact direct implementations over complex wrapper layers)
-- CONTINUOUS_TURN_MARATHON=ENFORCED (Do NOT stop or conclude turn after one single file. Sequentially implement all planned modules in a continuous tool-calling loop)
+- CONTINUOUS_LONG_GOAL=ENFORCED (Do not stop after a cosmetic micro-change; complete the 1-2 substantial modules and their decisive evidence)
 
 WARNING_TRIAGE_RULES
 - BLOCKING_BLACKLIST=[SecurityLeak, CompilerFatal, TypeCheckError, BrokenBuild, SchemaMismatch]
@@ -72,10 +71,10 @@ WARNING_TRIAGE_RULES
 
 FINAL_GOAL=<project goal from live manifest>
 CURRENT_STAGE=<current goal stage>
-NEXT_DELIVERABLE=<batch multi-module deliverable checklist (3-5 modules)>
+NEXT_DELIVERABLE=<one or two cohesive substantial modules with end-to-end acceptance>
 ACCEPTANCE_EVIDENCE=<required evidence IDs/types>
 AUTONOMOUS_DECISION_SCOPE=<implementation/test/build/mechanical/path/harness/small-project-architecture/local-git-closeout>
-STOP_CONDITIONS=<first-nonzero/scope-writer/owner-gate/circuit-breaker>
+STOP_CONDITIONS=<scope-writer/owner-gate/unrecoverable-safety-boundary>
 OWNER_ONLY_EXCEPTIONS=<cross-project/major-architecture/authority/credential/production/migration/destructive>
 NEXT_STAGE_TRIGGER=STAGE_TERMINAL_WITH_VALID_RECEIPT
 ROLL_FORWARD_REQUIRED=TRUE
@@ -95,7 +94,7 @@ ROLE_BOUNDARY
   expansion, cross-project conflicts, or owner-only actions through the liaison.
 
 MANDATORY_OUTPUT_REQUIREMENT
-Do NOT conclude the turn after editing a single file. Within this single turn, the agent MUST execute a continuous tool loop across all 3-5 target modules (edit -> typecheck -> git commit -> next module). Only after the entire batch is completed and committed, emit exactly one structured JSON object conforming to `TERMINAL_RECEIPT_V2_6`.
+Do NOT conclude the turn after a cosmetic single-file edit or status summary. Continue through implementation, integration, decision-relevant verification, local Git closeout, and evidence for the one or two substantial target modules. Only after the Goal is terminal, emit exactly one structured JSON object conforming to `TERMINAL_RECEIPT_V2_6`.
 ```
 
 ---
@@ -110,10 +109,10 @@ PROJECT: {{PROJECT_NAME}} | STAGE: {{STAGE_ID}} | RISK: {{RISK_LEVEL}}
 TARGET: {{STAGE_DELIVERABLE_SUMMARY}}
 PATHS: {{OWNED_PATHS}}
 1. Ponytail Minimalist Rule: YAGNI! Reuse existing codebase & stdlib first. Zero redundant wrapper/factory bloat.
-2. Continuous Marathon: Do NOT stop after 1 file. Sequentially implement all 3-5 planned modules in this single turn.
-3. Fast Loop: For each module -> implement directly -> quick syntax/typecheck -> git commit -> proceed immediately to next module.
-4. On non-core failure after 1 attempt, apply Stub & Bypass into .agents/BLOCKERS.md.
-5. After all planned modules in the batch are committed, emit final TERMINAL_RECEIPT!
+2. Long Goal: Complete one or two cohesive substantial modules; do not stop at a cosmetic micro-change.
+3. Evidence Loop: Implement -> quick syntax/type/build feedback -> focused tests when decision-relevant -> integrate -> local closeout.
+4. Diagnose and fix real failures; never conceal them with a mock, stub, bypass, or fabricated receipt.
+5. After the Goal and its decisive acceptance evidence are complete, emit final TERMINAL_RECEIPT!
 ```
 
 ---
@@ -153,7 +152,7 @@ CURRENT_STAGE=<current goal stage>
 NEXT_DELIVERABLE=<smallest stage-complete deliverable>
 ACCEPTANCE_EVIDENCE=<required evidence IDs/types>
 AUTONOMOUS_DECISION_SCOPE=<implementation/test/build/mechanical/path/harness/small-project-architecture/local-git-closeout boundaries>
-STOP_CONDITIONS=<first-nonzero/scope-writer/owner-gate/acceptance boundaries>
+STOP_CONDITIONS=<scope-writer/owner-gate/unrecoverable-safety/acceptance boundaries>
 OWNER_ONLY_EXCEPTIONS=<cross-project/major-architecture/authority/credential/production/migration/destructive gates>
 NEXT_STAGE_TRIGGER=STAGE_TERMINAL
 ROLL_FORWARD_REQUIRED=TRUE

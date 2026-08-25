@@ -14,7 +14,7 @@ A useful long contract identifies:
 - desired outcome and explicit exclusions;
 - input or candidate identity and retained evidence;
 - ordered preflight, mutation, verification, and conditional branches;
-- first-nonzero stopping behavior;
+- project-local failure isolation and recovery behavior;
 - final readback fields and the next decision owner.
 
 Do not copy a full transcript. A continuation handoff should retain only current
@@ -24,35 +24,36 @@ state and one unambiguous next action.
 
 `PROJECT_TASK_CONTRACT_V2_6_TURBO` activates high-throughput, latency-minimized execution across an arbitrary number of independent projects without artificial concurrency bottlenecks.
 
-### 1. Dynamic Risk-Tiered Slicing
-Batch implementations based on operational blast radius rather than arbitrary single-file gates:
-- **Low Risk (UI layout, documentation, decoupled helpers)**: Batch 3–5 files before running a single focused gate.
-- **Medium Risk (Standard business logic, API client routes)**: Batch 1–2 files before running a focused gate.
-- **High Risk (Auth boundaries, database migration, concurrency locks)**: Execute single-slice instant validation.
+### 1. Long-Goal risk-tiered execution
+Each Goal covers one or two cohesive, substantial modules. Slice implementation and
+validation by operational blast radius, not by an arbitrary file count. Use fast
+syntax/type/build checks for feedback and run focused tests whenever they materially
+reduce compatibility, correctness, data-integrity, or security risk. A stage still
+ends with the decisive focused/full gates required by its acceptance contract.
 
-### 2. Build-Only Fast Track During Implementation
-- **Ban Intermediate Unit/Integration Tests**: During multi-file feature writing, running full or unit test suites after every edit is prohibited.
-- **Sub-Second Syntax & Typecheck Only**: Writers verify intermediate edits solely with rapid compile/type-check tools (`tsc --noEmit`, `py_compile`, `cargo check`).
-- **Single-Pass Regression**: Validation test suites are deferred and executed once in bulk at stage closeout.
+### 2. Real-dependency and evidence policy
+Do not impose a blanket intermediate-test ban, fixed retry count, or timeout-driven
+stub/bypass rule. A repeated command must follow a changed hypothesis, implementation,
+harness, environment, or evidence target. Never hide a real dependency, compatibility,
+security, identity, authorization, data-integrity, schema, build, or core-logic failure
+behind a mock, stub, ignored result, or fabricated receipt. Normal test doubles are
+allowed only at an established contract boundary and never substitute for decisive
+integration evidence.
 
-### 3. 30-Second Stub & Bypass Protocol
-- When encountering an unresolved non-blocking dependency, third-party API mismatch, or flaky test assertion, the writer is permitted **at most one** repair attempt.
-- On a second failure, the writer MUST immediately insert a typed `# TODO: [BYPASS]` stub or mock, append the issue to `.agents/BLOCKERS.md`, and advance to the next unblocked component.
-
-### 4. Zero-Progress Circuit Breaker
-- Invariant: `max_zero_progress_retries = 1`. Re-running identical test/build commands without intervening code modifications is strictly forbidden.
-
-### 5. Elastic Uncapped Wave Dispatch
-- Multi-project concurrency is dynamically unconstrained across isolated physical repositories. All active, non-blocked projects are dispatched simultaneously in parallel waves.
+### 3. Elastic uncapped wave dispatch
+- Multi-project concurrency is dynamically unconstrained across isolated physical repositories. Every non-running, authorized project is dispatched simultaneously in parallel waves.
 - Each project maintains its exclusive single-writer lease to prevent internal index collisions, but cross-project executions operate with zero cross-blocking.
+- Only a real `active`/`inProgress` turn skips dispatch. `idle`, terminal completion,
+  empty output, unknown transport, and recoverable local failures require a concrete
+  same-task next action; they are not reasons to wait.
 
-### 6. Bounded Log & Context Budget
+### 4. Bounded Log & Context Budget
 - Intermediate stdout/stderr logs injected into continuation contexts MUST be bounded to:
   1. Exit code & Command;
   2. First fatal error stack trace (capped at <= 30 lines);
   3. SHA-256 evidence receipt digest.
 
-### 6. End-State Goal Directives & Exception-Only Escalation
+### 5. End-State Goal Directives & Exception-Only Escalation
 - **Central Controller Specific Analysis**: The Central Controller evaluates each project thread individually (examining recent Git commits, open issues, and missing feature gaps) before issuing an End-State Goal Directive (`PROJECT_END_STATE_GOAL_DIRECTIVE`).
 - **Target Product End-State**: The Directive sets an unambiguous target for the finished product state (e.g. complete interactive UI, reliable backend persistence, zero compilation errors, full test coverage).
 - **Autonomous Multi-Module Closed Loop**: The Project Worker independently implements the required multi-file changes, runs fast syntax/type checks, resolves minor errors locally, and commits atomic Git commits in a continuous tool loop.
@@ -99,7 +100,7 @@ or real-user impact, destructive operations, external publication or deployment,
 cross-host migration, material scope or dependency expansion, irreversible external
 writes, or major architecture direction. Those remain exact owner decisions. The
 authority also does not relax host/root identity, frozen task settings, writer and
-migration locks, first-nonzero semantics, secret checks, or publication readback.
+migration locks, project-local failure evidence, secret checks, or publication readback.
 Projects without the explicit authority record network work as `UNEXECUTED` and route
 only the smallest needed authority request.
 
@@ -116,24 +117,23 @@ change project state.
 Continuous progress is not permission to infer acceptance, rerun unchanged evidence,
 create filler, duplicate work, bypass safety or authority, publish, deploy, use
 credentials, or cross hosts. A project-controlled helper may perform an independent
-bounded subtask only when effective capacity permits; it is counted as an execution
-unit, stays within the owner's envelope, and cannot hold another writer lease. The
-first formal/native nonzero still stops the current round, after which the owner may
-fresh-admit only a materially different recovery or independent action.
+  bounded subtask only when safe; it stays within the owner's envelope and cannot hold
+  another writer lease. A failure is isolated to the affected project and step. The owner may repair it or
+  choose another already-authorized action without waiting for sibling projects.
 
 ## V2.5 proactive heartbeat dispatch
 
 `PROJECT_TASK_CONTRACT_V2_5` makes the heartbeat compute work instead of waiting for
 an existing fresh admission or pending wait. On every wake, read the current manifest,
-ledger head, authoritative topology, effective capacity, writer leases, and current
+ledger head, authoritative topology, writer leases, and current
 task state for every manifest project. Classify each project exactly once as
 `DISPATCHED`, `ALREADY_ACTIVE`, `OWNER_BLOCKED`, `NO_SAFE_ACTION`, or
 `COMPLETE_FROZEN` and retain the evidence IDs behind that classification.
 
-When a project has a safe, already-authorized, state-changing next stage, form one
-minimum envelope with project/action/owner/host/root/scope/writer/authority/evidence/
-stop/handoff fields, fresh-admit it, and dispatch the unique owner/writer. Repeat for
-other independent projects until effective capacity is full. The end of a project
+When a project is not genuinely `active`/`inProgress`, form one concrete long Goal
+with project/action/owner/host/root/scope/writer/authority/evidence/stop fields and
+dispatch the existing unique owner/writer. Dispatch every independent sibling in the
+same sweep. The end of a project
 stage immediately triggers the same computation for its next long contract. A
 project waiting on one gate must first consider feature, integration, test,
 documentation, performance, or evidence work that does not depend on that gate.
@@ -142,9 +142,10 @@ One project's `OWNER_BLOCKED` or `NO_SAFE_ACTION` result never pauses the other
 projects. `global_decision=RUNNING` is mandatory when any project is dispatched or
 already active. Use global `WAITING` only after every manifest project has fresh
 evidence and none has a safe action; use `OWNER_ATTENTION` when an exact owner-only
-blocker is the last remaining route. Status-only sweeps, duplicate admissions,
-filler, repeated no-value actions, second writers, and capacity/host/root/authority/
-first-nonzero/credential/release/migration bypasses remain forbidden.
+blocker is the last remaining route. Status-only sweeps, filler, repeated no-value
+actions, second writers, and host/root/authority/credential/release/migration bypasses
+remain forbidden. Missing numeric capacity is not a dispatch prohibition; only an
+explicit runtime rejection isolates the affected project.
 
 Every V2.5 project sweep begins with its `PROJECT_GOAL_CONTRACT`. Read `final_goal`,
 `current_stage`, `next_deliverable`, `acceptance_evidence`, autonomous decision
@@ -155,9 +156,9 @@ conflicts, major architecture, authority escalation, credentials/private data,
 production release/deploy, migration, and destructive or irreversible external writes
 remain owner gates.
 
-`goal_stalled`, `thread_idle`, and `completed_empty_output` trigger diagnosis, not
-completion. Preserve the original final goal and current objective. The writer or
-heartbeat diagnoses the cause and resumes it, or selects authorized feature,
+`goal_stalled`, `thread_idle`, `completed_empty_output`, and `TRANSPORT_UNVERIFIED`
+never prove completion. They also never justify passive waiting. Preserve the original
+final goal and current objective. The writer or heartbeat immediately resumes it, or selects authorized feature,
 integration, test, documentation, performance, or evidence work independent of the
 blocker. A stopped/idle/empty turn and a status-only readback never satisfy progress.
 
@@ -240,10 +241,9 @@ Set `authoritative` only from executor-owned runtime evidence. When
   [thread-architecture.md](thread-architecture.md).
 - Parallelize only independent projects with separate writers and no shared lock,
   candidate, release channel, or owner decision.
-- Before every dispatch wave, count visible active turns plus nested workers and
-  subtract the declared control-slot reserve. Project-external tasks still consume
-  host capacity. A zero budget forbids new dispatch; an unknown nested-worker count
-  is treated conservatively as zero budget until authoritative readback.
+- Do not infer a dispatch ceiling from missing numeric runtime metadata. Send all
+  independent same-task Goal follow-ups in the same sweep. If the runtime explicitly
+  rejects one, isolate that project and continue all siblings.
 - Use one controller and a fenced lock for task migrations or shared portfolio
   state. A successor must accept its compact handoff before the old task is
   archived.
@@ -265,7 +265,8 @@ Set `authoritative` only from executor-owned runtime evidence. When
   action or wait; it may remain active without falsely renewing a work lease. Any
   pause, completion, or explicit
   stop requires the same closure handshake and user-visible success notifications.
-  A delivery failure forbids pausing; a later poll needs a fresh, bounded admission.
+  A delivery failure forbids treating the project as complete; the next scheduled
+  sweep continues with a concrete same-task action unless an owner-only boundary exists.
 - Batch major questions. Ordinary command failures, harness defects, missing tools,
   and mechanically decidable outcomes remain terminal task records and feed the next
   materially different internal recovery round; do not emit half-step Root/user
@@ -391,32 +392,17 @@ Do not defer a confirmed critical/high defect, authentication or authorization
 fail-closed behavior, credential exposure, destructive-data risk, a dependency or
 supply-chain check required to build or trust the candidate, or any publication and
 release authority gate. A focus-project priority applies only inside the effective
-dispatch budget and never bypasses fresh admission, exact host/root/task-worktree
-identity, unique writer lease, shared-state serialization, or first-nonzero stopping.
+dispatch priority and never bypasses exact host/root/task-worktree identity, unique
+writer lease, shared-state serialization, or owner-only gates.
 
-## Capacity expansion contract
+## Runtime concurrency contract
 
-A request to raise portfolio concurrency changes only the configured policy ceiling.
-It cannot override a smaller runtime hard limit. Persist both values and compute the
-effective ceiling as their minimum; when no authoritative runtime number exists,
-record it as unknown rather than inventing a guarantee.
-
-If both numeric runtime capacity and nested-worker count are explicitly not exposed,
-an approved `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` may replace the numeric
-dispatch budget for one attempt at a time. It targets only an existing idle unique
-owner with a complete fresh action envelope. The platform's accepted turn or
-explicit rejection is the slot evidence; after either result, re-read active state
-and leases before any next attempt. A rejection stops new dispatch. Never parallelize
-these probes or use them to create tasks/worktrees, take a writer, run filler, migrate,
-use credentials, or publish/deploy.
-
-Capacity beyond the previous baseline is admitted one effective project action at a
-time. Before dispatch, prove complete input, a non-empty action ID, fresh admission
-`ZERO`, the exact independent project task, and its writer lease. Then apply the same
-host, migration, authority, shared-state, and first-nonzero gates used at baseline.
-Control work, nested helpers, duplicate actions, empty tasks, and synthetic capacity
-tests are not valid surge work. Do not create filler tasks merely to demonstrate that
-the configured number is reachable.
+Runtime concurrency is discovered by actual acceptance or rejection, not by an
+invented single-token fallback. Dispatch every independent non-running project to its
+existing unique owner in the same sweep. A runtime rejection is authoritative only
+for the rejected project and attempt; it neither cancels accepted siblings nor blocks
+later sibling attempts. Never use concurrency discovery to create tasks/worktrees,
+take another writer, run filler, migrate, use credentials, or publish/deploy.
 
 ## Stage closeout contract
 
@@ -430,10 +416,12 @@ writer lease, preserved foreign/retained state, and whether a worktree merge is
 required before mutation. Any gate may be `NOT_REQUIRED` only when the contract names
 the still-valid evidence and explains why the result cannot change the decision.
 
-At the first nonzero, stop immediately and mark later steps `UNEXECUTED`. Unknown
-task/host/branch identity, foreign or unowned dirty paths, and merge conflicts are
-stop conditions. Do not change entry points, force push, force merge, discard retained
-  state, or let a control task complete the chain. A successful closeout records the commit SHA,
+Handle a nonzero inside the affected project: preserve the first decisive error,
+repair when authorized, and do not falsely mark dependent steps complete. Unknown
+task/host/branch identity, foreign or unowned dirty paths, and merge conflicts remain
+stop conditions for the unsafe mutation they guard, but never stop sibling projects.
+Do not change entry points, force push, force merge, discard retained state, or let a
+control task complete the chain. A successful closeout records the commit SHA,
 remote SHA readback, and target-branch merge SHA; only then may the stage be reported
 complete and its writer lease released.
 

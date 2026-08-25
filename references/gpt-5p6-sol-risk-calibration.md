@@ -29,19 +29,19 @@ To balance maximum execution velocity with strict delivery quality and prevent l
 ## Confirmed Behavioral Patterns & Anti-Over-Verification Controls
 
 1. **Local Certainty Trap & Verification Loops**:
-   - High reasoning models tend to optimize for local test certainty, triggering repetitive single-function test runs instead of advancing macro project milestones.
-   - *Control*: **Build-Only Fast Track**. In feature construction phases, intermediate unit/integration tests are prohibited. Agents use sub-second compile/type checks (`tsc --noEmit`, `py_compile`, `cargo check`) and defer test suites to milestone closeout.
+   - High reasoning models can over-repeat low-value tests instead of advancing macro project milestones.
+   - *Control*: **Decision-Relevant Verification**. Use fast compile/type checks for feedback and run focused tests whenever they materially reduce correctness, compatibility, data-integrity, or security risk. Do not impose a blanket intermediate-test ban; finish each stage with its decisive acceptance gates.
 
 2. **Zero-Progress Command Looping**:
    - When encountering minor assertions or uncertain diffs, models may re-run identical test commands without editing code.
-   - *Control*: **Zero-Progress Circuit Breaker**. Maximum consecutive retries without code changes is 1 (`max_zero_progress_retries = 1`). A retry MUST be preceded by a code modification or an explicitly updated hypothesis.
+   - *Control*: **Hypothesis-Driven Repetition**. Do not rerun blindly. Before repeating, change the hypothesis, implementation, harness, environment, or evidence target. No fixed numeric retry ceiling may suppress useful autonomous recovery.
 
 3. **Warning & Linter Rabbit Holes**:
    - Models easily divert attention toward non-blocking third-party deprecations, styling hints, or harmless mock mismatches.
    - *Control*: **Deterministic Whitelist/Blacklist**. Whitelisted non-blocking warnings are ignored immediately as `NON_BLOCKING_WITH_EVIDENCE`.
 
-4. **30-Second Stub & Bypass Protocol**:
-   - When a non-core dependency, third-party API, or test harness error fails after 1 repair attempt, the agent MUST immediately insert a typed `# TODO: [BYPASS]` mock/stub, record the issue in `.agents/BLOCKERS.md`, and proceed to the next module.
+4. **Real-Dependency Integrity**:
+   - Never hide a dependency, compatibility, security, identity, authorization, data-integrity, schema, build, or core-logic failure behind a mock, stub, bypass, or ignored result. Normal test doubles are acceptable only at an established contract boundary and cannot replace decisive integration evidence.
 
 ## Portfolio Conclusions & Rules
 
@@ -50,4 +50,3 @@ To balance maximum execution velocity with strict delivery quality and prevent l
 3. Keep Root control-only. Implementation and all project evidence production stay in the admitted project task holding the unique writer lease.
 4. Apply Sibling Project Fault Isolation & Continuous Progress: a localized failure or error in one project stage isolates only that project and triggers bounded self-healing, without aborting sibling project pipelines.
 5. Apply fail-closed authority and security boundaries. Permission to continue is not permission to deploy, release, access credentials, or use production data.
-

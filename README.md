@@ -15,10 +15,10 @@ An evidence-backed Codex Skill for coordinating multiple projects, repositories,
   * **GPT-5.6 Sol (`high reasoning`)**: Strategic planning, multi-project dependency arbitration, architectural partitioning, and complex root-cause diagnosis.
   * **GPT-5.6 Terra (`primary worker`)**: High-throughput (100+ t/s) multi-file feature implementation, business logic assembly, and type validation.
   * **GPT-5.6 Luna / Light (`light worker`)**: Boilerplate generation, documentation, changelogs, and receipt drafting.
-* **Build-Only Fast Track**: Eliminates micro-test fixation loops during active feature coding. Enforces sub-second syntax/type checks (`tsc --noEmit`, `py_compile`, `cargo check`) during implementation and runs full validation suites in bulk at stage closeout.
-* **30-Second Stub & Bypass Protocol**: Prevents rabbit-hole stalls on third-party flakiness or non-core issues. Stubs unresolved blockers into `.agents/BLOCKERS.md` after at most one repair attempt.
-* **Elastic Uncapped Concurrency**: Dynamically dispatches all unblocked, active projects in parallel waves with zero artificial concurrency bottlenecks while preserving exclusive single-writer leases per repository.
-* **Zero-Progress Circuit Breaker**: Enforces `max_zero_progress_retries = 1`, forbidding repetitive test executions without intervening code diffs.
+* **Decision-Relevant Verification**: Uses fast syntax/type/build checks for feedback and focused tests whenever they materially reduce correctness, compatibility, data-integrity, or security risk; there is no blanket intermediate-test ban.
+* **Real-Dependency Integrity**: Diagnoses and fixes real dependency or harness problems instead of hiding them behind mocks, stubs, bypasses, or ignored results.
+* **Forced Elastic Concurrency**: Monitors every project in the same sweep and dispatches every non-running authorized project in parallel, preserving one writer per repository. Missing numeric capacity never creates an artificial single-slot throttle.
+* **Hypothesis-Driven Recovery**: Repeated commands follow a changed hypothesis, implementation, harness, environment, or evidence target; no fixed retry count suppresses useful recovery.
 * **Deterministic Terminal Receipts**: Cryptographically anchored JSON evidence receipts (`TERMINAL_RECEIPT_V2_6`) verify delivery before allowing autonomous goal roll-forward.
 
 ---
@@ -40,7 +40,7 @@ An evidence-backed Codex Skill for coordinating multiple projects, repositories,
          │ Project Owner 1 (Terra) │ │ Project Owner 2 (Terra) │ │ Project Owner N (Terra) │
          │  - Isolated Git Tree    │ │  - Isolated Git Tree    │ │  - Isolated Git Tree    │
          │  - Single Writer Lease  │ │  - Single Writer Lease  │ │  - Single Writer Lease  │
-         │  - Build-Only FastTrack │ │  - Build-Only FastTrack │ │  - Build-Only FastTrack │
+         │  - Evidence-driven     │ │  - Evidence-driven     │ │  - Evidence-driven     │
          └─────────────────────────┘ └─────────────────────────┘ └─────────────────────────┘
 ```
 
@@ -58,8 +58,8 @@ An evidence-backed Codex Skill for coordinating multiple projects, repositories,
 ## Contract Progression (v2.4 $\rightarrow$ v2.6 Turbo)
 
 * **v2.4 (`PROJECT_TASK_CONTRACT_V2_4`)**: Introduced the validation-value gate, explicit `routine_public_network` envelope, and continuous progress across temporary blockers.
-* **v2.5 (`PROJECT_TASK_CONTRACT_V2_5`)**: Added proactive heartbeat sweeps, rolling project goal contracts, single canonical request routing (`OWNER_LIAISON_ROUTING_V1`), and bounded admission token fallback.
-* **v2.6 Turbo (`PROJECT_TASK_CONTRACT_V2_6_TURBO`)**: Adds dual-core compute tiering, build-only fast track (banning intermediate unit tests), 30-second stub & bypass, elastic uncapped multi-project concurrency, and structured `TERMINAL_RECEIPT_V2_6` schemas.
+* **v2.5 (`PROJECT_TASK_CONTRACT_V2_5`)**: Added proactive heartbeat sweeps, rolling project goal contracts, and single canonical request routing (`OWNER_LIAISON_ROUTING_V1`). Legacy bounded-token fields remain readable but do not gate dispatch.
+* **v2.6 Turbo (`PROJECT_TASK_CONTRACT_V2_6_TURBO`)**: Adds dual-core compute tiering, one-or-two-module long Goals, decision-relevant verification, forced elastic multi-project concurrency, and structured `TERMINAL_RECEIPT_V2_6` schemas.
 
 ---
 

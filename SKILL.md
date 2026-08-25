@@ -26,27 +26,30 @@ host identity, or evidence boundaries.
    - **GPT-5.6 Luna / Light**: Lightweight boilerplate, mechanics, documentation, and receipts.
    
    Enable Elastic Uncapped Concurrency across isolated project repositories: dispatch all
-   unblocked, active projects in parallel waves with zero artificial concurrency bottlenecks,
+   authorized non-running projects in parallel waves with zero artificial concurrency bottlenecks,
    while maintaining exclusive single-writer leases per project.
    
-   Enforce Build-Only Fast Track during multi-file coding: ban intermediate unit tests,
-   verify edits using sub-second syntax/type checks, and defer regression suites to stage closeout.
-   
-   Apply the 30-Second Stub & Bypass Protocol: after at most one failed repair on non-core
-   dependencies or flakiness, stub out the component, log to `.agents/BLOCKERS.md`, and
-   advance without halting.
-   
-   Enforce the Zero-Progress Circuit Breaker: forbid duplicate test/build executions without
-   intervening code diffs (`max_zero_progress_retries = 1`).
+   Use decision-relevant verification throughout implementation. Prefer fast syntax/type/build
+   checks for tight feedback, but run focused tests whenever they materially reduce compatibility,
+   correctness, or security risk. Do not impose a blanket intermediate-test ban or a fixed retry
+   count; change the hypothesis, implementation, harness, or evidence target before repeating a
+   command.
+
+   Never use a stub, mock, bypass, or ignored failure to conceal a real dependency,
+   compatibility, security, identity, authorization, data-integrity, schema, build, or core-logic
+   problem. Test doubles are allowed only when they are the product's normal testing boundary and
+   the resulting evidence still validates the real contract.
 
    Enforce the Ponytail Anti-Over-Engineering Protocol: write code like a pragmatic senior engineer.
    Follow the strict decision ladder: 1. YAGNI (eliminate speculative abstractions and factory bloat);
    2. Reuse existing codebase and stdlib first; 3. Minimal viable diff (write the minimum direct,
    concise code needed to satisfy the acceptance test).
 
-   Enforce Epic Batch Continuous Marathons: ban 30-second single-file micro-turns. A project turn
-   MUST execute an uninterrupted tool-calling loop that implements, typechecks, and git-commits
-   a batch checklist of 3-5 core modules before concluding the turn with a terminal receipt.
+   Enforce Long-Goal Continuous Execution: each Goal owns one or two cohesive, substantial
+   product or engineering modules and continues through implementation, integration, necessary
+   verification, local Git closeout, and evidence. Do not stop after a cosmetic micro-change or
+   status summary. If the planned module is already largely complete, roll directly into an
+   evidence-backed security scan and verified bug-fix phase rather than inventing more features.
 
    Enforce Default-to-Recommended Auto-Advance: unless an action crosses strict owner redlines
    (production deployment, credential exposure, destructive database deletion, or forced git
@@ -66,14 +69,18 @@ host identity, or evidence boundaries.
    evaluates each active unblocked project independently and dispatches all ready workstreams.
 
    
-   Separate control-plane roles from project writers, keep one writer lease per project,
-   count nested workers as execution units, and reserve control-plane capacity before calculating
-   a new-dispatch budget.
-   
-   When runtime explicitly exposes neither numeric hard/effective capacity nor nested-worker
-   count, use `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` only when authorized. Attempt one
-   complete action at a time against an existing idle unique owner; the platform's accepted turn
-   or explicit rejection is the per-slot evidence.
+   Separate control-plane roles from project writers and keep one writer lease per project.
+   Monitor every declared project in the same sweep. Skip dispatch only for an exact task with a
+   real `active`/`inProgress` execution turn or for an unavoidable owner-only boundary. Every
+   other non-running state—including `idle`, terminal completion, empty output, unknown transport,
+   or a recoverable local failure—must receive a concrete same-task next action in that sweep.
+   Dispatch independent projects in parallel; do not invent a numeric capacity ceiling or a
+   one-in-flight fallback merely because the runtime omits a capacity number. An explicit runtime
+   rejection applies only to that project and never suppresses sibling dispatch.
+
+   `TRANSPORT_UNVERIFIED` and `completed_empty_output` are evidence labels, not wait states or
+   permission to skip work. Preserve their evidence, avoid duplicate probes, and continue with a
+   materially useful same-task Goal that does not depend on the missing output.
    
    Select the governance mode explicitly:
    - In `federated_thin_kernel` mode, each project owner owns project-local action selection,
@@ -121,9 +128,12 @@ host identity, or evidence boundaries.
    When a real blocker needs user judgment, notify the user promptly through the owner liaison.
    State the exact blocker, why authorized automation cannot resolve it, minimal options, the
    recommendation, and the next step.
-4. Before dispatch or mutation, evaluate the action against runtime readback. Use
-   `scripts/portfolio_control.py admit` when the action crosses hosts, writes a repository,
-   changes external state, or resumes after uncertain context.
+4. Before authority-expanding, cross-host, lifecycle-changing, destructive, credential-bearing,
+   release, deployment, or irreversible external work, evaluate the action against runtime
+   readback and use `scripts/portfolio_control.py admit` when its legacy manifest contract applies.
+   Ordinary same-task implementation, testing, build, local commit, evidence, and Goal roll-forward
+   inside the existing host/root/writer/authority envelope do not wait on an admission token,
+   topology refresh, numeric capacity readback, or transport proof.
    Before every validation, name the blocker it removes or decision it changes and the new
    evidence expected. If the result cannot change the next action or only repeats still-valid
    evidence, mark it `NOT_REQUIRED`.
@@ -133,7 +143,8 @@ host identity, or evidence boundaries.
    When explicitly authorized, a project owner may utilize `routine_public_network` within its
    declared scope envelope. Credentials, private data, production impact, destructive actions,
    publication, and deployment remain strict owner gates.
-   Under V2.6, every heartbeat sweep classifies projects and dispatches safe independent actions.
+   Under V2.6, every heartbeat sweep classifies all projects simultaneously and dispatches every
+   non-running safe independent action.
    Every project declares a `PROJECT_GOAL_CONTRACT` with `roll_forward_required=true` and
    `ordinary_recovery_autonomous=true`. A terminal stage updates the goal and rolls forward upon
    generating a valid `TERMINAL_RECEIPT_V2_6`.
@@ -171,4 +182,10 @@ python scripts/portfolio_control.py append-event EVENTS.jsonl EVENT.json --expec
 python scripts/portfolio_control.py verify-ledger EVENTS.jsonl
 ```
 
-An admission `NONZERO` stops that formal round. The ledger lock is fail-closed.
+These commands retain compatibility with legacy portfolio manifests and audit artifacts. They are
+diagnostic or mandatory only for the authority-expanding and lifecycle-changing boundaries named
+above; they are not a permission gate for forced same-task Goal roll-forward.
+
+An admission `NONZERO` stops only the affected risky atom. It never aborts sibling project sweeps
+or prevents a different already-authorized same-task action. The ledger lock remains fail-closed
+for ledger writes.

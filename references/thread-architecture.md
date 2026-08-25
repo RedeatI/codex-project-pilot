@@ -92,29 +92,15 @@ an owner action; obtain the one decision-changing readback first.
 - A provisional successor never holds a writer lease. Keep it `queued` or
   `handoff_only` until the handoff is accepted and the controller finalizes the
   transfer.
-- Count active turns, not every saved or idle task, against the effective active-turn
-  limit. `max_active_turns` is the configured policy ceiling; it is not evidence of a
-  platform guarantee. When the runtime reports a smaller authoritative ceiling, use
-  `effective_max_active_turns = min(max_active_turns,
-  runtime_reported_max_active_turns)`. A null runtime readback means no smaller limit
-  has been established, not that the platform guarantees the configured number.
-  Control tasks consume capacity while they are actually running. Reserve enough
-  headroom for runtime supervision to process a terminal event without
-  starving the portfolio.
-- Count each active nested worker as another execution unit even when it does not
-  appear as a top-level task. Nested writers also consume the project's single
-  writer lease. Compute `new_dispatch_budget = max(0, effective_max_active_turns -
-  active_turns - active_nested_workers - reserved_control_slots)`. If the runtime
-  exposes only a worker-count lower bound or omits worker identity, use a zero
-  dispatch budget until an authoritative readback resolves it.
-- A configured increase above `baseline_max_active_turns` creates surge capacity, not
-  filler capacity. When active load plus the control reserve exceeds the baseline,
-  each excess unit must be an active independent project writer labeled
-  `capacity_class=surge`. It must carry `dispatch_admission` with a non-empty action
-  and admission ID, `input_complete=true`, `admission_result=ZERO`, and
-  `writer_task_id` equal to that task's exact ID. Control roles and nested workers
-  cannot use surge capacity. Existing migration, authority, first-nonzero, shared-state,
-  and one-writer gates remain unchanged.
+- Monitor all declared project tasks in one sweep. Only a real `active`/`inProgress`
+  turn skips a new dispatch. Every other state receives a concrete same-task next
+  action unless an unavoidable owner-only boundary applies.
+- Missing numeric capacity or nested-worker metadata does not imply zero capacity and
+  must not serialize independent projects. Dispatch all independent non-running
+  project owners; an explicit platform rejection isolates only that project.
+- Nested writers still consume the project's single writer lease. Control roles and
+  nested workers cannot acquire a second project writer or manufacture filler work.
+  Host, migration, authority, shared-state, and owner-only gates remain unchanged.
 - A project-associated nested worker must be controlled by that project's task.
   It normally operates under the controller's one writer lease; set the nested
   worker's `writer=true` only after a formal lease transfer makes the controller
@@ -228,7 +214,7 @@ V2.5 topology snapshots also record the complete decision made during that wake:
     ],
     "runtime_capacity_fallback": {
       "schema": "BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1",
-      "applicability": "APPLIED",
+      "applicability": "NOT_APPLICABLE",
       "numeric_capacity_status": "NOT_EXPOSED",
       "nested_worker_status": "NOT_EXPOSED",
       "max_inflight_tokens": 1,
@@ -267,14 +253,10 @@ only for a manifest project already complete or intentionally frozen. Any safe
 classification forces `global_decision=RUNNING`; a blocked project cannot turn the
 global decision into `WAITING` while another project can run.
 
-When the manifest enables `BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1`, the sweep
-must include its fallback readback. Apply it only when both numeric capacity and the
-nested-worker count are explicitly `NOT_EXPOSED`. Attempts follow `candidate_order`,
-target only existing idle manifest owners, and are serialized with one in-flight
-token. An accepted platform turn is recorded as `DISPATCHED` with its turn and
-post-attempt readback; an explicit rejection is the last attempt in the wave. Re-read
-active turns and leases after every acceptance or rejection. This is authoritative
-per-slot admission evidence, not a guessed numeric capacity.
+`BOUNDED_RUNTIME_ADMISSION_TOKEN_FALLBACK_V1` is retained only so legacy topology
+artifacts can be read and audited. It is not a dispatch policy. Do not serialize
+independent projects or withhold work because numeric capacity is absent. Record each
+actual acceptance or rejection; a rejection affects only that project and attempt.
 
 Each result also proves which project goal it read. `goal_current_stage` and
 `goal_next_deliverable` must match the audited manifest, and the named
@@ -284,11 +266,11 @@ manifest goal and proving `goal_rolled_forward=true`; then dispatch against the 
 stage. A missing goal routes as `GOVERNANCE_GOAL_CONFLICT`, not global `WAITING`.
 An ordinary blocker in one goal does not affect runnable siblings.
 
-If a result observes `goal_stalled`, `thread_idle`, or `completed_empty_output`, set
-`goal_diagnosis_trigger` and pair it with `RESUME_CURRENT_GOAL` or
-`AUTHORIZED_INDEPENDENT_PATH`. Those events cannot produce `COMPLETE_FROZEN` and do
-not clear the persistent final goal/current objective. Status-only output is not
-progress.
+If a result observes `goal_stalled`, `thread_idle`, `completed_empty_output`, or
+`TRANSPORT_UNVERIFIED`, set `goal_diagnosis_trigger` and immediately pair it with
+`RESUME_CURRENT_GOAL` or `AUTHORIZED_INDEPENDENT_PATH`. Those events cannot produce
+`COMPLETE_FROZEN`, do not clear the persistent final goal/current objective, and do
+not justify passive waiting. Status-only output is not progress.
 
 Set `control_plane_issue` only when the fault is architectural to portfolio control:
 start failure across projects, next-stage derivation or dispatch failure, parallelism
@@ -687,13 +669,12 @@ checks:
 
 - required control-role presence, multiplicity, and authorities;
 - active-turn capacity and status consistency;
-- configured, runtime-clamped effective, baseline, and surge capacity; eligible
-  full-input/fresh-admitted independent project writers; nested-worker capacity;
-  controller/host consistency; reserved control slots; and the resulting dispatch budget;
+- observed active turns, nested workers, and explicit runtime accept/reject evidence;
+  missing numeric capacity is recorded but never converted into an artificial zero budget;
 - federated root absence, scheduler authority ceiling, control/project execution
   separation, and project-worker controller identity;
 - project-stage evidence/test/build/diff/readback-to-commit/push/merge closure,
-  including exact executor, branches, stop-on-first-nonzero, and SHA readbacks;
+  including exact executor, branches, project-local failure isolation, and SHA readbacks;
 - one writer lease per project;
 - manifest owner identity, project, host, execution/canonical root, and writer lease;
 - provisional-task freeze state;
